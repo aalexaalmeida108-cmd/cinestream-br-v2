@@ -38,6 +38,20 @@ jobs:
             python scripts/enrich_imdb_genres.py
           fi
 
+      - name: Fetch episode counts
+        continue-on-error: true
+        run: |
+          if [ -f data/episodes.json ]; then
+            python scripts/fetch_episodes.py --workers 3
+          fi
+
+      - name: Measure episode counts on the player
+        continue-on-error: true
+        run: |
+          if [ -f data/episode_counts.json ]; then
+            python scripts/probe_episodes.py --workers 6
+          fi
+
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"

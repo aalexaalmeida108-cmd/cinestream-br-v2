@@ -67,6 +67,41 @@ remaining items by IMDb id, then by exact normalized title and release year with
 runtime guards. It never overwrites Bingebang matches. The weekly workflow runs the IMDb fallback
 after refreshing the catalog; the dataset is cached under `.cache/imdb/` locally.
 
+## Refresh episode counts
+
+```bash
+python3 scripts/fetch_episodes.py --workers 3
+python3 scripts/probe_episodes.py --workers 6
+```
+
+The watch page needs to know how many episodes each season has, so the **Next episode** button can
+roll from the last episode of a season into the first episode of the next one instead of running off
+the end of a season.
+
+`fetch_episodes.py` reads the TMDB season listing of every series and anime in the catalog
+(`/tv/{id}/seasons`) and extracts the episode count of each season. Pages are cached under
+`.cache/tmdb/seasons/`, so a rerun only downloads missing titles. Use `--cache-only` to build from
+the cache without touching the network.
+
+`probe_episodes.py` checks those counts against the player itself. The player is the authority on
+which episodes exist, and it occasionally differs from TMDB (some anime carry an extra episode, and
+a few titles are split into different season lengths). The script probes episode 1 of every known
+season, then binary searches for the last existing episode, and also probes the season after the
+last known one to catch seasons the catalog has not listed yet. A request that cannot be answered
+is treated as unknown rather than as "missing", so a rate limit never becomes a wrong count.
+Results are cached in `.cache/watchplay/counts.json` and saved as the run progresses.
+
+Both scripts write `data/episodes.json`, the file the watch page downloads:
+
+| File | Contents |
+| --- | --- |
+| `data/episodes.json` | Episode count per season, keyed by TMDB id |
+
+The payload is a dense list per title, indexed by season: `[10, 10, 10, 10, 10, 10, 7, 6]` means
+season 1 has 10 episodes and season 8 has 6. The player uses the count to bound the episode input,
+to label the counter, and to decide when **Next episode** moves to the next season. When a title
+has no entry in the file the watch page falls back to the catalog season count and stays usable.
+
 ## Deploy to GitHub Pages
 
 The repository is already configured for Pages from the `main` branch, repository root. Push to
@@ -95,7 +130,10 @@ js/recent.js               Shared localStorage history for Continue watching
 scripts/fetch_catalog.py   Catalog downloader and normalizer
 scripts/enrich_genres.py   Bingebang genre crawl, title/year join, bitmask output
 scripts/enrich_imdb_genres.py  IMDb id genre fallback
-data/                      Generated catalog JSON and genres.json
+scripts/fetch_episodes.py  TMDB season listing, episode count per season
+scripts/probe_episodes.py  Player probes, authoritative episode counts
+scripts/episode_data.py    Shared cache and merge helpers for the episode counts
+data/                      Generated catalog JSON, genres.json and episodes.json
 assets/                    Favicon and poster placeholder
 ```
 
@@ -108,9 +146,13 @@ assets/                    Favicon and poster placeholder
   entries. It records the title and last opened season/episode, never uploads history, and can be
   removed per title or cleared from the catalog row.
 - WatchPlay runs in a cross-origin iframe and does not publish playback events to the parent page.
-  The site therefore cannot detect the end of an episode or advance automatically; the watch page
-  provides a **Next episode** button instead. True automatic advance would require a same-origin
-  HLS player and a stream URL source, not the current embedded player.
+  The site therefore cannot detect the end of an episode and advance by itself; the watch page
+  provides a **Next episode** button instead, which follows the real episode count of each season
+  and rolls into the next season on the last episode. True automatic advance would require a
+  same-origin HLS player and a stream URL source, not the current embedded player.
+- The episode counter comes from `data/episodes.json`, which is measured against the player. A
+  title that the player does not host has no measured counts, so the watch page falls back to the
+  catalog season count.
 - The original MyEmbed URL is exposed as an alternate player on every watch page.
 - The site does not host, proxy or store any video. Playback is provided by WatchPlay, and metadata
   comes from EmbedMovies. Genre metadata comes from Bingebang and IMDb.

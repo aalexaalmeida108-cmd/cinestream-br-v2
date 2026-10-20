@@ -50,6 +50,7 @@ const state = {
   rendered: 0,
   cache: new Map(),
   genres: null,
+  episodes: null,
   index: null,
   requestId: 0
 };
@@ -78,6 +79,7 @@ function init() {
   bindEvents();
   loadIndex();
   loadGenres();
+  loadEpisodes();
   renderRecent();
 
   const hash = window.location.hash.replace('#', '');
@@ -402,8 +404,6 @@ function createCard(item, options = {}) {
   if (item.y) parts.push(String(item.y));
   if (item.ty === 'movie' && item.rt) {
     parts.push(formatRuntime(item.rt));
-  } else if (item.ty !== 'movie' && item.s) {
-    parts.push(item.s === 1 ? '1 season' : item.s + ' seasons');
   }
 
   parts.forEach((value, index) => {
@@ -417,9 +417,22 @@ function createCard(item, options = {}) {
     meta.appendChild(span);
   });
 
-  if (!parts.length) {
+  if (item.ty !== 'movie') {
+    const seasons = seasonCount(item);
+    if (parts.length) {
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      meta.appendChild(dot);
+    }
     const span = document.createElement('span');
-    span.textContent = item.ty === 'movie' ? 'Movie' : (item.ty === 'anime' ? 'Anime' : 'Series');
+    span.className = 'card-season';
+    span.dataset.tm = item.tm || '';
+    span.dataset.seasons = String(seasons);
+    span.textContent = seasons === 1 ? '1 season' : seasons + ' seasons';
+    meta.appendChild(span);
+  } else if (!parts.length) {
+    const span = document.createElement('span');
+    span.textContent = 'Movie';
     meta.appendChild(span);
   }
 
@@ -651,6 +664,48 @@ function applySearch(value) {
 
   if (!state.cache.has(state.category)) return;
   render(true);
+}
+
+// Per-season episode counts, used to show the real number of seasons.
+async function loadEpisodes() {
+  try {
+    const response = await fetch('data/episodes.json', { cache: 'force-cache' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!payload || !payload.items || typeof payload.items !== 'object') return;
+    state.episodes = payload.items;
+    updateSeasonLabels();
+  } catch (error) {
+    // Episode counts are optional; the catalog still works without them.
+  }
+}
+
+// Refreshes the season count of the cards already on screen.
+function updateSeasonLabels() {
+  if (!el.grid) return;
+  el.grid.querySelectorAll('.card-season').forEach((span) => {
+    const seasons = Number(span.dataset.seasons || 0);
+    if (seasons) return;
+    const counts = state.episodes && state.episodes[String(span.dataset.tm)];
+    if (!Array.isArray(counts)) return;
+    let total = 0;
+    for (const value of counts) {
+      if (value > 0) total += 1;
+    }
+    if (!total) return;
+    span.dataset.seasons = String(total);
+    span.textContent = total === 1 ? '1 season' : total + ' seasons';
+  });
+}
+
+function seasonCount(item) {
+  const counts = state.episodes && state.episodes[String(item.tm)];
+  if (!Array.isArray(counts)) return item.s || 0;
+  let total = 0;
+  for (const value of counts) {
+    if (value > 0) total += 1;
+  }
+  return total || item.s || 0;
 }
 
 async function loadGenres() {

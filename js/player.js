@@ -5,10 +5,12 @@
 
 const params = new URLSearchParams(window.location.search);
 const WATCHPLAY_ORIGIN = 'https://v2.watchplay.shop';
+const EPISODE_INDEX_URL = 'data/episodes.json';
 const el = {};
 let config = null;
 let loadTimer = 0;
 let lastRecentKey = '';
+let episodeIndex = null;
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -20,6 +22,7 @@ function init() {
   el.episodeBar = document.getElementById('episodeBar');
   el.seasonSelect = document.getElementById('seasonSelect');
   el.episodeInput = document.getElementById('episodeInput');
+  el.episodeCounter = document.getElementById('episodeCounter');
   el.playEpisode = document.getElementById('playEpisode');
   el.nextEpisode = document.getElementById('nextEpisode');
   el.playerFrame = document.getElementById('playerFrame');
@@ -34,9 +37,29 @@ function init() {
   el.removeRecent = document.getElementById('removeRecent');
 
   config = readConfig();
-  applyConfig();
   bindEvents();
-  rememberCurrent();
+  loadEpisodeIndex();
+}
+
+// Loads the per-season episode counts, then applies the configuration. The
+// counts come first so the page never opens an episode that does not exist.
+function loadEpisodeIndex() {
+  if (config.type === 'movie') {
+    applyConfig();
+    return;
+  }
+
+  fetch(EPISODE_INDEX_URL, { cache: 'force-cache' })
+    .then((response) => (response.ok ? response.json() : null))
+    .catch(() => null)
+    .then((payload) => {
+      const items = payload && payload.items;
+      if (items) {
+        const counts = items[String(config.tmdb)];
+        if (counts && counts.length) episodeIndex = counts;
+      }
+      applyConfig();
+    });
 }
 
 function readConfig() {
@@ -57,7 +80,7 @@ function readConfig() {
     year: clampInt(params.get('y'), 0, 2100, 0),
     rating: clampNumber(params.get('r'), 0, 10, 0),
     seasons: seasons,
-    season: clampInt(params.get('se'), 1, Math.max(1, seasons), 1),
+    season: clampInt(params.get('se'), 1, 200, 1),
     episode: clampInt(params.get('ep'), 1, 999, 1),
     overview: cleanText(params.get('o'), 1200)
   };
@@ -67,6 +90,8 @@ function applyConfig() {
   document.title = config.title + ' \u2014 CineStream';
   el.title.textContent = config.title;
   el.kind.textContent = kindLabel(config.type);
+
+  clampToKnownEpisodes();
 
   const url = buildPlayerUrl();
   if (!url) {
@@ -87,13 +112,30 @@ function applyConfig() {
   updateMeta();
   updateSynopsis();
 
-  if (config.type !== 'movie' && config.seasons > 0) {
+  if (config.type !== 'movie' && knownSeasons().length) {
     setupEpisodeControls();
   }
   if (el.nextEpisode) el.nextEpisode.hidden = config.type === 'movie';
+  updateNextEpisodeButton();
 
   applyBackLink();
   loadPlayer(url);
+  rememberCurrent();
+}
+
+// Keeps the requested season and episode inside what actually exists.
+function clampToKnownEpisodes() {
+  if (config.type === 'movie' || !episodeIndex) return;
+
+  const seasons = knownSeasons();
+  if (!seasons.length) return;
+
+  const lastSeason = seasons[seasons.length - 1];
+  if (config.season > lastSeason) config.season = lastSeason;
+  if (!seasons.includes(config.season)) config.season = seasons[0];
+
+  const count = seasonEpisodeCount(config.season);
+  if (count && config.episode > count) config.episode = count;
 }
 
 function rememberCurrent() {
@@ -128,23 +170,111 @@ function removeCurrentRecent() {
 function setupEpisodeControls() {
   el.episodeBar.hidden = false;
 
-  for (let season = 1; season <= config.seasons; season += 1) {
+  const seasons = knownSeasons();
+  el.seasonSelect.replaceChildren();
+  for (const season of seasons) {
     const option = document.createElement('option');
     option.value = String(season);
-    option.textContent = 'Season ' + season;
+    const count = seasonEpisodeCount(season);
+    option.textContent = count ? 'Season ' + season + ' (' + count + ')' : 'Season ' + season;
     el.seasonSelect.appendChild(option);
   }
 
   el.seasonSelect.value = String(config.season);
   el.episodeInput.value = String(config.episode);
-  el.episodeInput.max = '999';
+  el.episodeInput.max = String(seasonEpisodeCount(config.season) || 999);
+  updateEpisodeCounter();
+  updateNextEpisodeButton();
+}
+
+function knownSeasons() {
+  const counts = episodeIndex || [];
+  const seasons = [];
+  for (let index = 0; index < counts.length; index += 1) {
+    if (counts[index] > 0) seasons.push(index + 1);
+  }
+  if (seasons.length) return seasons;
+
+  const fallback = [];
+  for (let season = 1; season <= Math.max(1, config.seasons); season += 1) {
+    fallback.push(season);
+  }
+  return fallback;
+}
+
+function seasonEpisodeCount(season) {
+  if (!episodeIndex) return 0;
+  return Number(episodeIndex[season - 1]) || 0;
+}
+
+// Returns the season/episode the "Next episode" button would open, or null
+// when the current episode is the last one of the last season.
+function nextEpisodeTarget() {
+  if (!config || config.type === 'movie') return null;
+
+  const count = seasonEpisodeCount(config.season);
+
+  // Without a known season length there is no last episode to roll over
+  // from, so the button stays inside the current season.
+  if (!count) {
+    return config.episode < 999
+      ? { season: config.season, episode: config.episode + 1 }
+      : null;
+  }
+
+  if (config.episode < count) {
+    return { season: config.season, episode: config.episode + 1 };
+  }
+
+  const seasons = knownSeasons();
+  const position = seasons.indexOf(config.season);
+  const nextSeason = position >= 0 ? seasons[position + 1] : 0;
+  if (!nextSeason) return null;
+  return { season: nextSeason, episode: 1 };
+}
+
+function updateNextEpisodeButton() {
+  if (!el.nextEpisode) return;
+  if (!config || config.type === 'movie') return;
+  const target = nextEpisodeTarget();
+  if (!target) {
+    el.nextEpisode.disabled = true;
+    el.nextEpisode.textContent = 'No more episodes';
+    el.nextEpisode.title = 'This is the last episode of the last season.';
+    return;
+  }
+  el.nextEpisode.disabled = false;
+  el.nextEpisode.textContent = 'Next episode';
+  el.nextEpisode.title = target.season === config.season
+    ? 'Play S' + target.season + 'E' + target.episode
+    : 'Continue with S' + target.season + 'E' + target.episode;
+}
+
+function syncEpisodeControls() {
+  const count = seasonEpisodeCount(config.season);
+  el.episodeInput.max = String(count || 999);
+  if (count && config.episode > count) {
+    config.episode = count;
+    el.episodeInput.value = String(count);
+  }
+  updateEpisodeCounter();
+  updateNextEpisodeButton();
+}
+
+function updateEpisodeCounter() {
+  if (!el.episodeCounter) return;
+  const count = seasonEpisodeCount(config.season);
+  el.episodeCounter.textContent = count
+    ? 'Episode ' + config.episode + ' of ' + count
+    : '';
+  el.episodeCounter.hidden = !count;
 }
 
 function bindEvents() {
   el.playEpisode.addEventListener('click', applyEpisode);
   if (el.nextEpisode) el.nextEpisode.addEventListener('click', playNextEpisode);
   if (el.removeRecent) el.removeRecent.addEventListener('click', removeCurrentRecent);
-  el.seasonSelect.addEventListener('change', applyEpisode);
+  el.seasonSelect.addEventListener('change', onSeasonChange);
   el.episodeInput.addEventListener('change', applyEpisode);
   el.episodeInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
@@ -161,21 +291,62 @@ function bindEvents() {
   });
 }
 
+function onSeasonChange() {
+  const seasons = knownSeasons();
+  const lastSeason = seasons.length ? seasons[seasons.length - 1] : Math.max(1, config.seasons);
+  const season = clampInt(el.seasonSelect.value, 1, lastSeason, 1);
+  const changed = season !== config.season;
+  config.season = season;
+
+  // Picking another season starts it from its first episode.
+  const count = seasonEpisodeCount(season);
+  if (changed || !count || config.episode > count) {
+    config.episode = 1;
+  }
+  el.episodeInput.value = String(config.episode);
+  el.episodeInput.max = String(count || 999);
+  updateEpisodeCounter();
+  updateNextEpisodeButton();
+
+  applyEpisode();
+}
+
+// Advances one episode. On the last episode of a season it rolls over to
+// the first episode of the next season, so the button keeps working through
+// the whole series.
 function playNextEpisode() {
   if (!config || config.type === 'movie') return;
-  config.episode = Math.min(999, config.episode + 1);
-  el.episodeInput.value = String(config.episode);
+
+  const target = nextEpisodeTarget();
+  if (!target) {
+    updateNextEpisodeButton();
+    return;
+  }
+
+  config.season = target.season;
+  config.episode = target.episode;
+  el.seasonSelect.value = String(target.season);
+  el.episodeInput.value = String(target.episode);
+  el.episodeInput.max = String(seasonEpisodeCount(target.season) || 999);
+  updateEpisodeCounter();
+
   applyEpisode();
 }
 
 function applyEpisode() {
-  const season = clampInt(el.seasonSelect.value, 1, Math.max(1, config.seasons), 1);
-  const episode = clampInt(el.episodeInput.value, 1, 999, 1);
+  const seasons = knownSeasons();
+  const lastSeason = seasons.length ? seasons[seasons.length - 1] : Math.max(1, config.seasons);
+  const season = clampInt(el.seasonSelect.value, 1, lastSeason, 1);
+  const count = seasonEpisodeCount(season);
+  const episode = clampInt(el.episodeInput.value, 1, count || 999, 1);
 
   el.seasonSelect.value = String(season);
   el.episodeInput.value = String(episode);
+  el.episodeInput.max = String(count || 999);
   config.season = season;
   config.episode = episode;
+  updateEpisodeCounter();
+  updateNextEpisodeButton();
 
   const url = buildPlayerUrl();
   if (!url) {
