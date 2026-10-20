@@ -5,7 +5,8 @@ Live site: <https://aalexaalmeida108-cmd.github.io/cinestream-br-v2/>
 A static catalog browser for [EmbedMovies](https://embedmovies.org/) with direct playback through
 [WatchPlay](https://watchplay.shop/) ([MyEmbed](https://myembed.biz/) remains available as an
 alternate player). Movies, series and anime are searchable, sortable and filterable by genre, and
-every title opens in a dedicated watch page with a season/episode selector for series.
+every title opens in a dedicated watch page with a season/episode selector for series. The catalog
+also keeps a local "Continue watching" row with the last opened titles and episodes.
 
 The site is plain HTML, CSS and JavaScript. There is no build step and no backend.
 
@@ -88,8 +89,9 @@ index.html                 Catalog page
 player.html                Watch page
 css/style.css              Shared layout, catalog grid, cards
 css/player.css             Watch page and player shell
-js/app.js                  Catalog loading, search, sort, pagination
+js/app.js                  Catalog loading, search, sort, pagination, Continue watching row
 js/player.js               URL parsing, WatchPlay URL construction, episode controls
+js/recent.js               Shared localStorage history for Continue watching
 scripts/fetch_catalog.py   Catalog downloader and normalizer
 scripts/enrich_genres.py   Bingebang genre crawl, title/year join, bitmask output
 scripts/enrich_imdb_genres.py  IMDb id genre fallback
@@ -102,6 +104,13 @@ assets/                    Favicon and poster placeholder
 - Playback URLs are built as `https://v2.watchplay.shop/movie/{tmdb-or-imdb}` for movies and
   `https://v2.watchplay.shop/tvshow/{tmdb}/{season}/{episode}` for series and anime. The player
   iframe runs with a sandbox that blocks popups while allowing scripts, forms and fullscreen.
+- Continue watching is stored only in `localStorage` under `cinestream:recent:v1` and capped at 12
+  entries. It records the title and last opened season/episode, never uploads history, and can be
+  removed per title or cleared from the catalog row.
+- WatchPlay runs in a cross-origin iframe and does not publish playback events to the parent page.
+  The site therefore cannot detect the end of an episode or advance automatically; the watch page
+  provides a **Next episode** button instead. True automatic advance would require a same-origin
+  HLS player and a stream URL source, not the current embedded player.
 - The original MyEmbed URL is exposed as an alternate player on every watch page.
 - The site does not host, proxy or store any video. Playback is provided by WatchPlay, and metadata
   comes from EmbedMovies. Genre metadata comes from Bingebang and IMDb.

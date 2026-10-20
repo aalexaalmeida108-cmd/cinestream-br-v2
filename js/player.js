@@ -8,6 +8,7 @@ const WATCHPLAY_ORIGIN = 'https://v2.watchplay.shop';
 const el = {};
 let config = null;
 let loadTimer = 0;
+let lastRecentKey = '';
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -20,6 +21,7 @@ function init() {
   el.seasonSelect = document.getElementById('seasonSelect');
   el.episodeInput = document.getElementById('episodeInput');
   el.playEpisode = document.getElementById('playEpisode');
+  el.nextEpisode = document.getElementById('nextEpisode');
   el.playerFrame = document.getElementById('playerFrame');
   el.playerLoading = document.getElementById('playerLoading');
   el.loadingText = document.getElementById('loadingText');
@@ -29,10 +31,12 @@ function init() {
   el.synopsisText = document.getElementById('synopsisText');
   el.backLink = document.getElementById('backLink');
   el.alternateLink = document.getElementById('alternateLink');
+  el.removeRecent = document.getElementById('removeRecent');
 
   config = readConfig();
   applyConfig();
   bindEvents();
+  rememberCurrent();
 }
 
 function readConfig() {
@@ -86,9 +90,39 @@ function applyConfig() {
   if (config.type !== 'movie' && config.seasons > 0) {
     setupEpisodeControls();
   }
+  if (el.nextEpisode) el.nextEpisode.hidden = config.type === 'movie';
 
   applyBackLink();
   loadPlayer(url);
+}
+
+function rememberCurrent() {
+  if (!config || !window.CineStreamRecent) return;
+  if (!config.tmdb && !config.imdb) return;
+  if (!buildPlayerUrl()) return;
+
+  const entry = CineStreamRecent.remember({
+    type: config.type,
+    title: config.title,
+    tm: config.tmdb,
+    im: config.imdb,
+    year: config.year,
+    rating: config.rating,
+    seasons: config.seasons,
+    poster: params.get('p') || '',
+    season: config.season,
+    episode: config.episode
+  });
+
+  if (!entry) return;
+  lastRecentKey = CineStreamRecent.keyOf(entry);
+  if (el.removeRecent) el.removeRecent.hidden = false;
+}
+
+function removeCurrentRecent() {
+  if (!lastRecentKey || !window.CineStreamRecent) return;
+  CineStreamRecent.removeKey(lastRecentKey);
+  if (el.removeRecent) el.removeRecent.hidden = true;
 }
 
 function setupEpisodeControls() {
@@ -108,6 +142,8 @@ function setupEpisodeControls() {
 
 function bindEvents() {
   el.playEpisode.addEventListener('click', applyEpisode);
+  if (el.nextEpisode) el.nextEpisode.addEventListener('click', playNextEpisode);
+  if (el.removeRecent) el.removeRecent.addEventListener('click', removeCurrentRecent);
   el.seasonSelect.addEventListener('change', applyEpisode);
   el.episodeInput.addEventListener('change', applyEpisode);
   el.episodeInput.addEventListener('keydown', (event) => {
@@ -123,6 +159,13 @@ function bindEvents() {
     el.playerLoading.hidden = true;
     el.playerFrame.hidden = false;
   });
+}
+
+function playNextEpisode() {
+  if (!config || config.type === 'movie') return;
+  config.episode = Math.min(999, config.episode + 1);
+  el.episodeInput.value = String(config.episode);
+  applyEpisode();
 }
 
 function applyEpisode() {
@@ -146,6 +189,7 @@ function applyEpisode() {
   updateUrl();
   updateMeta();
   loadPlayer(url);
+  rememberCurrent();
 }
 
 function loadPlayer(url) {

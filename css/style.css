@@ -418,6 +418,139 @@ button {
   min-height: 280px;
 }
 
+.recent-section {
+  padding-top: 30px;
+}
+
+.recent-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.recent-heading h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.recent-clear {
+  padding: 6px 2px;
+  color: var(--muted-2);
+  background: none;
+  border: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.recent-clear:hover {
+  color: var(--text);
+}
+
+.recent-row {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 2px 2px 10px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.recent-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.recent-row::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+.recent-item {
+  position: relative;
+  flex: 0 0 176px;
+  scroll-snap-align: start;
+}
+
+.recent-item .card {
+  height: 100%;
+}
+
+.recent-item .card-rating {
+  display: none;
+}
+
+.recent-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 4px 7px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: rgba(7, 9, 12, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+}
+
+.recent-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: #fff;
+  background: rgba(7, 9, 12, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.16s ease, background 0.16s ease;
+}
+
+.recent-item:hover .recent-remove,
+.recent-remove:focus-visible {
+  opacity: 1;
+}
+
+.recent-remove:hover {
+  background: rgba(190, 40, 40, 0.9);
+}
+
+@media (hover: none) {
+  .recent-remove {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .recent-section {
+    padding-top: 22px;
+  }
+
+  .recent-item {
+    flex-basis: 150px;
+  }
+}
+
+@media (max-width: 430px) {
+  .recent-item {
+    flex-basis: 140px;
+  }
+}
+
 .card {
   position: relative;
   display: flex;

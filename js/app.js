@@ -71,10 +71,14 @@ function init() {
   el.tabs = Array.from(document.querySelectorAll('.tab'));
   el.genreBar = document.getElementById('genreBar');
   el.genreChips = Array.from(document.querySelectorAll('.chip'));
+  el.recentSection = document.getElementById('recentSection');
+  el.recentGrid = document.getElementById('recentGrid');
+  el.recentClear = document.getElementById('recentClear');
 
   bindEvents();
   loadIndex();
   loadGenres();
+  renderRecent();
 
   const hash = window.location.hash.replace('#', '');
   const initial = CATEGORIES[hash] ? hash : 'movies';
@@ -113,6 +117,21 @@ function bindEvents() {
   });
 
   el.loadMore.addEventListener('click', loadMore);
+
+  if (el.recentClear) {
+    el.recentClear.addEventListener('click', () => {
+      CineStreamRecent.clear();
+      renderRecent();
+    });
+  }
+
+  window.addEventListener('storage', (event) => {
+    if (event.key === CineStreamRecent.STORAGE_KEY) renderRecent();
+  });
+  window.addEventListener('pageshow', renderRecent);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) renderRecent();
+  });
 
   if ('IntersectionObserver' in window) {
     const observer = new IntersectionObserver((entries) => {
@@ -329,12 +348,13 @@ function summaryText(total) {
   return numberFormat.format(total) + ' ' + (total === 1 ? meta.singular : meta.label.toLowerCase());
 }
 
-function createCard(item) {
-  const displayTitle = cardTitle(item);
+function createCard(item, options = {}) {
+  const displayTitle = options.title || cardTitle(item);
   const card = document.createElement('a');
   card.className = 'card';
-  card.href = playerHref(item, displayTitle);
-  card.setAttribute('aria-label', 'Watch ' + displayTitle + (item.y ? ' (' + item.y + ')' : ''));
+  card.href = options.href || playerHref(item, displayTitle);
+  card.setAttribute('aria-label', (options.recent ? 'Continue watching ' : 'Watch ') +
+    displayTitle + (item.y ? ' (' + item.y + ')' : ''));
   if (displayTitle !== item.t) card.title = item.t;
 
   const poster = document.createElement('div');
@@ -353,6 +373,13 @@ function createCard(item) {
   const rating = Number(item.r) || 0;
   if (rating > 0) {
     poster.appendChild(ratingBadge(rating));
+  }
+
+  if (options.badge) {
+    const badge = document.createElement('span');
+    badge.className = 'recent-badge';
+    badge.textContent = options.badge;
+    poster.appendChild(badge);
   }
 
   const play = document.createElement('span');
@@ -400,6 +427,67 @@ function createCard(item) {
   card.appendChild(poster);
   card.appendChild(body);
   return card;
+}
+
+function renderRecent() {
+  if (!el.recentSection || !el.recentGrid || !window.CineStreamRecent) return;
+
+  const entries = CineStreamRecent.load();
+  if (!entries.length) {
+    el.recentGrid.replaceChildren();
+    el.recentSection.hidden = true;
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  entries.forEach((entry) => {
+    fragment.appendChild(createRecentCard(entry));
+  });
+
+  el.recentGrid.replaceChildren(fragment);
+  el.recentSection.hidden = false;
+}
+
+function createRecentCard(entry) {
+  const item = {
+    t: entry.title,
+    ty: entry.type,
+    p: entry.poster,
+    y: entry.year,
+    r: entry.rating,
+    s: entry.seasons,
+    tm: entry.tm,
+    im: entry.im,
+    se: entry.season,
+    ep: entry.episode
+  };
+
+  const wrap = document.createElement('div');
+  wrap.className = 'recent-item';
+  wrap.dataset.key = CineStreamRecent.keyOf(entry);
+
+  const card = createCard(item, {
+    href: CineStreamRecent.href(entry),
+    title: entry.title,
+    recent: true,
+    badge: CineStreamRecent.label(entry)
+  });
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'recent-remove';
+  remove.setAttribute('aria-label', 'Remove ' + entry.title + ' from Continue watching');
+  remove.textContent = '\u00d7';
+  remove.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    CineStreamRecent.removeKey(wrap.dataset.key);
+    renderRecent();
+  });
+
+  wrap.appendChild(card);
+  wrap.appendChild(remove);
+  return wrap;
 }
 
 function ratingBadge(rating) {

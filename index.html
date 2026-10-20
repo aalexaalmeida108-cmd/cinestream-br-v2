@@ -87,6 +87,14 @@
     </div>
   </nav>
 
+  <section class="container recent-section" id="recentSection" hidden aria-labelledby="recentTitle">
+    <div class="recent-heading">
+      <h2 id="recentTitle">Continue watching</h2>
+      <button class="recent-clear" id="recentClear" type="button">Clear</button>
+    </div>
+    <div class="recent-row" id="recentGrid"></div>
+  </section>
+
   <main class="container" id="catalog">
     <div class="notice" id="notice" role="status" hidden></div>
     <section class="grid" id="grid" aria-busy="true"></section>
@@ -110,6 +118,7 @@
     <div class="container"><p class="notice error">This catalog needs JavaScript enabled.</p></div>
   </noscript>
 
+  <script src="js/recent.js" defer></script>
   <script src="js/app.js" defer></script>
 </body>
 </html>
