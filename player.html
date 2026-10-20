@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -152,19 +152,19 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M19 12H5m7 7-7-7 7-7"/>
       </svg>
-      Voltar
+      Back
     </button>
-    <div class="player-title" id="playerTitle">Carregando...</div>
+    <div class="player-title" id="playerTitle">Loading...</div>
   </header>
 
   <main class="player-container">
     <div id="loading" class="loading">
       <div class="spinner"></div>
-      <span>Carregando player...</span>
+      <span>Loading player...</span>
     </div>
     <div id="error" class="error" style="display: none;">
-      <div class="error-message" id="errorMessage">Erro ao carregar player</div>
-      <button class="error-btn" id="errorBtn">Voltar</button>
+      <div class="error-message" id="errorMessage">Error loading player</div>
+      <button class="error-btn" id="errorBtn">Back</button>
     </div>
     <iframe id="playerFrame" class="player-frame" style="display: none;" allow="autoplay; fullscreen" allowfullscreen sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
   </main>
@@ -175,8 +175,8 @@
       const params = new URLSearchParams(window.location.search);
       return {
         url: params.get('url') || '',
-        title: params.get('title') || 'Filme',
-        type: params.get('type') || 'filme'
+        title: params.get('title') || 'Movie',
+        type: params.get('type') || 'movie'
       };
     }
 
@@ -225,7 +225,7 @@
 
       // Validate URL
       if (!params.url) {
-        showPlayerError('URL do player não fornecida');
+        showPlayerError('Player URL not provided');
         return;
       }
 
@@ -233,7 +233,7 @@
       const playerUrl = params.url;
       if (!playerUrl.startsWith('https://myembed.biz/filme') &&
           !playerUrl.startsWith('https://myembed.biz/serie')) {
-        showPlayerError('URL do player inválida');
+        showPlayerError('Invalid player URL');
         return;
       }
 

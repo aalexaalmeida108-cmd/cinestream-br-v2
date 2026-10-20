@@ -93,11 +93,11 @@ async function loadCategory(category, reset = true) {
         });
       }
     } else {
-      showMessage('Nenhum conteúdo encontrado', 'empty');
+      showMessage('No content found', 'empty');
     }
   } catch (error) {
     console.error('Error loading category:', error);
-    showMessage('Erro ao carregar conteúdo. Tente novamente.', 'error');
+    showMessage('Error loading content. Please try again.', 'error');
   }
 }
 
@@ -286,8 +286,8 @@ function createCard(item) {
 // Get placeholder poster
 function getPlaceholderPoster(type) {
   const colors = {
-    filme: '3b82f6',
-    serie: '10b981',
+    movie: '3b82f6',
+    series: '10b981',
     anime: 'f97316'
   };
   const color = colors[type] || '3b82f6';
@@ -297,7 +297,7 @@ function getPlaceholderPoster(type) {
 // Open player for item
 function openPlayer(item) {
   if (!item.tmdbId && !item.imdbId) {
-    showMessage('ID do conteúdo não disponível', 'error');
+    showMessage('Content ID not available', 'error');
     return;
   }
 
@@ -328,7 +328,7 @@ async function performSearch() {
     renderContent(results);
   } catch (error) {
     console.error('Search error:', error);
-    showMessage('Erro na busca. Tente novamente.', 'error');
+    showMessage('Search error. Please try again.', 'error');
   }
 }
 
@@ -414,7 +414,7 @@ function renderContent(items) {
   contentGrid.innerHTML = '';
 
   if (items.length === 0) {
-    showMessage('Nenhum resultado encontrado', 'empty');
+    showMessage('No results found', 'empty');
     return;
   }
 
