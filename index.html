@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Browse and watch movies, series and anime. Catalog data from EmbedMovies, playback by MyEmbed.">
+  <meta name="description" content="Browse and watch movies, series and anime. Catalog data from EmbedMovies, playback by WatchPlay.">
   <meta name="theme-color" content="#0b0d10">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta property="og:title" content="CineStream — Movies, Series & Anime">
@@ -73,6 +73,18 @@
         </label>
       </div>
     </div>
+
+    <div class="container genre-inner">
+      <div class="genre-bar" id="genreBar" role="group" aria-label="Filter by genre" hidden>
+        <button class="chip is-active" type="button" data-genre="all" aria-pressed="true">All</button>
+        <button class="chip" type="button" data-genre="acao" aria-pressed="false">Action</button>
+        <button class="chip" type="button" data-genre="aventura" aria-pressed="false">Adventure</button>
+        <button class="chip" type="button" data-genre="terror" aria-pressed="false">Horror</button>
+        <button class="chip" type="button" data-genre="comedia" aria-pressed="false">Comedy</button>
+        <button class="chip" type="button" data-genre="drama" aria-pressed="false">Drama</button>
+        <button class="chip chip-new" type="button" data-genre="lancamentos" aria-pressed="false">New releases</button>
+      </div>
+    </div>
   </nav>
 
   <main class="container" id="catalog">
@@ -88,7 +100,7 @@
     <div class="container footer-inner">
       <p>
         Catalog data from <a href="https://embedmovies.org/" target="_blank" rel="noopener noreferrer">EmbedMovies</a>.
-        Playback by <a href="https://myembed.biz/" target="_blank" rel="noopener noreferrer">MyEmbed</a>.
+        Playback by <a href="https://watchplay.shop/" target="_blank" rel="noopener noreferrer">WatchPlay</a>.
         This site does not host any media.
       </p>
     </div>

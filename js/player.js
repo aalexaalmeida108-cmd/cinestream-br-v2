@@ -1,9 +1,10 @@
 // Watch page. Reads the title data from the query string, builds the
-// MyEmbed URL, and exposes season/episode controls for series and anime.
+// WatchPlay URL, and exposes season/episode controls for series and anime.
 
 'use strict';
 
 const params = new URLSearchParams(window.location.search);
+const WATCHPLAY_ORIGIN = 'https://v2.watchplay.shop';
 const el = {};
 let config = null;
 let loadTimer = 0;
@@ -27,6 +28,7 @@ function init() {
   el.synopsis = document.getElementById('synopsis');
   el.synopsisText = document.getElementById('synopsisText');
   el.backLink = document.getElementById('backLink');
+  el.alternateLink = document.getElementById('alternateLink');
 
   config = readConfig();
   applyConfig();
@@ -71,6 +73,13 @@ function applyConfig() {
   }
 
   el.externalLink.href = url;
+  const alternate = buildAlternateUrl();
+  if (alternate) {
+    el.alternateLink.href = alternate;
+    el.alternateLink.hidden = false;
+  } else {
+    el.alternateLink.hidden = true;
+  }
   updateMeta();
   updateSynopsis();
 
@@ -109,7 +118,7 @@ function bindEvents() {
   });
 
   el.playerFrame.addEventListener('load', () => {
-    if (!/^https:\/\/myembed\.biz\//.test(el.playerFrame.src)) return;
+    if (!el.playerFrame.src.startsWith(WATCHPLAY_ORIGIN + '/')) return;
     window.clearTimeout(loadTimer);
     el.playerLoading.hidden = true;
     el.playerFrame.hidden = false;
@@ -132,6 +141,8 @@ function applyEpisode() {
   }
 
   el.externalLink.href = url;
+  const alternate = buildAlternateUrl();
+  if (alternate) el.alternateLink.href = alternate;
   updateUrl();
   updateMeta();
   loadPlayer(url);
@@ -153,17 +164,24 @@ function loadPlayer(url) {
 
 function buildPlayerUrl() {
   if (config.type === 'movie') {
+    const id = config.tmdb || config.imdb;
+    return id ? WATCHPLAY_ORIGIN + '/movie/' + encodeURIComponent(id) : '';
+  }
+
+  if (!config.tmdb) return '';
+  return WATCHPLAY_ORIGIN + '/tvshow/' + encodeURIComponent(config.tmdb)
+    + '/' + config.season + '/' + config.episode;
+}
+
+function buildAlternateUrl() {
+  if (config.type === 'movie') {
     const id = config.imdb || config.tmdb;
     return id ? 'https://myembed.biz/filme/' + encodeURIComponent(id) : '';
   }
 
   if (!config.tmdb) return '';
-
-  let url = 'https://myembed.biz/serie/' + encodeURIComponent(config.tmdb);
-  if (config.seasons > 0) {
-    url += '/' + config.season + '/' + config.episode;
-  }
-  return url;
+  return 'https://myembed.biz/serie/' + encodeURIComponent(config.tmdb)
+    + '/' + config.season + '/' + config.episode;
 }
 
 function updateMeta() {

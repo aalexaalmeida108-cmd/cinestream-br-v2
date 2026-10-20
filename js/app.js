@@ -29,6 +29,15 @@ const INDEX_KEYS = { movies: 'movie', series: 'series', animes: 'anime' };
 const PAGE_SIZE = 60;
 const PLACEHOLDER = 'assets/placeholder.svg';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p/w342';
+const GENRE_BITS = { acao: 1, aventura: 2, terror: 4, comedia: 8, drama: 16 };
+const GENRE_LABELS = {
+  acao: 'Action',
+  aventura: 'Adventure',
+  terror: 'Horror',
+  comedia: 'Comedy',
+  drama: 'Drama'
+};
+const NEW_RELEASE_YEAR = 2025;
 const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
 const numberFormat = new Intl.NumberFormat('en-US');
 
@@ -36,9 +45,11 @@ const state = {
   category: 'movies',
   query: '',
   sort: 'popular',
+  genre: 'all',
   visible: PAGE_SIZE,
   rendered: 0,
   cache: new Map(),
+  genres: null,
   index: null,
   requestId: 0
 };
@@ -58,9 +69,12 @@ function init() {
   el.loadMore = document.getElementById('loadMore');
   el.endNote = document.getElementById('endNote');
   el.tabs = Array.from(document.querySelectorAll('.tab'));
+  el.genreBar = document.getElementById('genreBar');
+  el.genreChips = Array.from(document.querySelectorAll('.chip'));
 
   bindEvents();
   loadIndex();
+  loadGenres();
 
   const hash = window.location.hash.replace('#', '');
   const initial = CATEGORIES[hash] ? hash : 'movies';
@@ -92,6 +106,10 @@ function bindEvents() {
     state.sort = el.sortSelect.value;
     state.visible = PAGE_SIZE;
     render(true);
+  });
+
+  el.genreChips.forEach((chip) => {
+    chip.addEventListener('click', () => setGenre(chip.dataset.genre));
   });
 
   el.loadMore.addEventListener('click', loadMore);
@@ -204,7 +222,18 @@ function normalize(value) {
 }
 
 function currentItems() {
-  const items = state.cache.get(state.category) || [];
+  let items = state.cache.get(state.category) || [];
+
+  if (state.genre !== 'all') {
+    if (state.genre === 'lancamentos') {
+      items = items.filter((item) => (Number(item.y) || 0) >= NEW_RELEASE_YEAR);
+    } else {
+      const bit = GENRE_BITS[state.genre] || 0;
+      const tags = state.genres || {};
+      items = items.filter((item) => ((tags[String(item.i)] || 0) & bit) !== 0);
+    }
+  }
+
   const query = normalize(state.query);
   if (!query) return items;
 
@@ -290,6 +319,13 @@ function summaryText(total) {
       '\u201c' + state.query + '\u201d';
   }
   const meta = CATEGORIES[state.category];
+  if (state.genre === 'lancamentos') {
+    return numberFormat.format(total) + (total === 1 ? ' new release' : ' new releases');
+  }
+  if (state.genre !== 'all') {
+    return numberFormat.format(total) + ' ' + GENRE_LABELS[state.genre].toLowerCase() +
+      ' ' + (total === 1 ? meta.singular : meta.label.toLowerCase());
+  }
   return numberFormat.format(total) + ' ' + (total === 1 ? meta.singular : meta.label.toLowerCase());
 }
 
@@ -460,7 +496,13 @@ function updateTabs() {
 
 function updateDocumentTitle() {
   const label = CATEGORIES[state.category].label;
-  document.title = label + ' \u2014 CineStream';
+  let prefix = '';
+  if (state.genre === 'lancamentos') {
+    prefix = 'New releases \u00b7 ';
+  } else if (state.genre !== 'all') {
+    prefix = GENRE_LABELS[state.genre] + ' \u00b7 ';
+  }
+  document.title = prefix + label + ' \u2014 CineStream';
 }
 
 function updateTabCounts() {
@@ -513,6 +555,49 @@ function applySearch(value) {
   state.visible = PAGE_SIZE;
   el.searchClear.hidden = !state.query;
 
+  if (state.query && state.genre !== 'all') {
+    state.genre = 'all';
+    updateGenres();
+    updateDocumentTitle();
+  }
+
+  if (!state.cache.has(state.category)) return;
+  render(true);
+}
+
+async function loadGenres() {
+  try {
+    const response = await fetch('data/genres.json', { cache: 'no-cache' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!payload || !payload.items || typeof payload.items !== 'object') return;
+    if (!Object.keys(payload.items).length) return;
+    state.genres = payload.items;
+    if (el.genreBar) el.genreBar.hidden = false;
+  } catch (error) {
+    // Genre filters are optional; the catalog still works without them.
+  }
+}
+
+function updateGenres() {
+  el.genreChips.forEach((chip) => {
+    const active = chip.dataset.genre === state.genre;
+    chip.classList.toggle('is-active', active);
+    chip.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
+function setGenre(value) {
+  if (value !== 'all' && value !== 'lancamentos' && !GENRE_BITS[value]) return;
+  if (state.genre === value) return;
+  state.genre = value;
+  state.visible = PAGE_SIZE;
+  updateGenres();
+  const chip = el.genreChips.find((item) => item.dataset.genre === value);
+  if (chip && typeof chip.scrollIntoView === 'function') {
+    chip.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  updateDocumentTitle();
   if (!state.cache.has(state.category)) return;
   render(true);
 }

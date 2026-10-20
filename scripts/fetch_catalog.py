@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Fetch the EmbedMovies catalog into static JSON files.
 
-The public site exposes a JSON endpoint at /inc/Ajax.php. The endpoint works
-without a CSRF token for catalog pages, but it rejects requests without a
-browser-like User-Agent, so keep the headers below.
+The public site exposes a JSON endpoint at /inc/Ajax.php. Catalog pages use a
+POST request with a CSRF token from the page's meta tag, plus a browser-like
+User-Agent, so keep the headers and token flow below.
 
 Output:
     data/movies.json
@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 import random
+import re
 import sys
 import threading
 import time
@@ -45,6 +46,11 @@ OUTPUTS = {
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
+)
+CSRF_PATTERN = re.compile(
+    r'<meta[^>]+(?:name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)'
+    r'|content=["\']([^"\']+)["\'][^>]+name=["\']csrf-token["\'])',
+    re.IGNORECASE,
 )
 
 _thread_local = threading.local()
@@ -117,6 +123,16 @@ def write_cache(kind, page, payload):
     os.replace(temporary, path)
 
 
+def refresh_csrf(session, kind):
+    """Load a catalog page and keep its CSRF token for API POSTs."""
+    response = session.get(REFERERS[kind], timeout=35)
+    response.raise_for_status()
+    match = CSRF_PATTERN.search(response.text)
+    token = (match.group(1) or match.group(2)) if match else ""
+    session.csrf_token = token
+    return token
+
+
 def fetch_page(kind, page, retries=5, refresh=False):
     if not refresh:
         cached = read_cache(kind, page)
@@ -125,12 +141,18 @@ def fetch_page(kind, page, retries=5, refresh=False):
 
     last_error = None
     for attempt in range(1, retries + 1):
+        session = get_session()
         try:
+            token = getattr(session, "csrf_token", "") or refresh_csrf(
+                session, kind)
             throttle()
-            response = get_session().post(
+            response = session.post(
                 API_URL,
-                data={"type": kind, "page": page},
-                headers={"Referer": REFERERS[kind]},
+                data={"type": kind, "page": page, "csrf_token": token},
+                headers={
+                    "Referer": REFERERS[kind],
+                    "X-CSRF-Token": token,
+                },
                 timeout=35,
             )
             if response.status_code == 429:
@@ -151,6 +173,7 @@ def fetch_page(kind, page, retries=5, refresh=False):
             write_cache(kind, page, payload)
             return page, payload
         except Exception as error:  # noqa: BLE001 - network boundary
+            session.csrf_token = ""
             last_error = error
             if attempt == retries:
                 break

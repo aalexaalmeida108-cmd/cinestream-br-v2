@@ -31,6 +31,13 @@ jobs:
       - name: Fetch catalog
         run: python scripts/fetch_catalog.py --workers 6
 
+      - name: Fill missing genres from IMDb
+        continue-on-error: true
+        run: |
+          if [ -f data/genres.json ]; then
+            python scripts/enrich_imdb_genres.py
+          fi
+
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"

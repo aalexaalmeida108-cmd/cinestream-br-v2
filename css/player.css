@@ -266,6 +266,13 @@
   text-underline-offset: 3px;
 }
 
+.watch-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .synopsis {
   max-width: 900px;
   margin-top: 34px;

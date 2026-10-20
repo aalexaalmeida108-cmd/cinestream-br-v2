@@ -83,8 +83,9 @@
         id="playerFrame"
         class="player-frame"
         title="Video player"
-        allow="autoplay; encrypted-media; picture-in-picture"
+        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
         allowfullscreen
+        sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
         referrerpolicy="strict-origin-when-cross-origin"
         hidden
       ></iframe>
@@ -93,10 +94,13 @@
     <div class="watch-foot">
       <p class="watch-hint">
         Playback is provided by
-        <a href="https://myembed.biz/" target="_blank" rel="noopener noreferrer">MyEmbed</a>.
-        If the player does not start, use “Open in new tab”.
+        <a href="https://watchplay.shop/" target="_blank" rel="noopener noreferrer">WatchPlay</a>.
+        If the player does not start, try the alternate player or open it in a new tab.
       </p>
-      <a class="btn btn-ghost" href="./">Browse more</a>
+      <div class="watch-actions">
+        <a class="btn btn-ghost" id="alternateLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Alternate player</a>
+        <a class="btn btn-ghost" href="./">Browse more</a>
+      </div>
     </div>
 
     <section class="synopsis" id="synopsis" hidden>
@@ -109,7 +113,8 @@
     <div class="container footer-inner">
       <p>
         Catalog data from <a href="https://embedmovies.org/" target="_blank" rel="noopener noreferrer">EmbedMovies</a>.
-        Playback by <a href="https://myembed.biz/" target="_blank" rel="noopener noreferrer">MyEmbed</a>.
+        Playback by <a href="https://watchplay.shop/" target="_blank" rel="noopener noreferrer">WatchPlay</a>.
+        Alternate player: <a href="https://myembed.biz/" target="_blank" rel="noopener noreferrer">MyEmbed</a>.
         This site does not host any media.
       </p>
     </div>
