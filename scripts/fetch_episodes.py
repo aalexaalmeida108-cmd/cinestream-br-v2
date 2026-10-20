@@ -100,7 +100,7 @@ def write_cache(tmdb, html):
     os.replace(temporary, path)
 
 
-def fetch_page(tmdb, retries=3):
+def fetch_page(tmdb, retries=6):
     url = SEASONS_URL.format(tmdb=tmdb)
     last_error = None
     for attempt in range(1, retries + 1):
@@ -130,7 +130,8 @@ def fetch_page(tmdb, retries=3):
         if code == "404":
             break
         if code == "429":
-            time.sleep(4.0 * attempt)
+            # The season pages are rate limited; back off and try again.
+            time.sleep(min(120, 20.0 * attempt))
             continue
         time.sleep(1.5 * attempt)
     raise RuntimeError(last_error or "request failed")
