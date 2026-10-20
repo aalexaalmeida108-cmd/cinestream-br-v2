@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Streaming Site</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <h1 class="logo"> streaming </h1>
+      <form class="search-form" id="searchForm">
+        <input type="text" id="searchInput" placeholder="Buscar filmes séries ou animes..." class="search-input">
+        <button type="submit" class="search-btn">Buscar</button>
+      </form>
+    </div>
+  </header>
+
+  <nav class="filters">
+    <div class="container">
+      <button class="filter-btn active" data-category="filmes">Filmes</button>
+      <button class="filter-btn" data-category="series">Séries</button>
+      <button class="filter-btn" data-category="animes">Animes</button>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div id="message" class="message"></div>
+    <div class="content-grid" id="contentGrid"></div>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
