@@ -1,0 +1,20 @@
+{
+  "generated_at": "2026-10-20T02:33:57+00:00",
+  "categories": {
+    "movie": {
+      "file": "movies.json",
+      "count": 17239,
+      "bytes": 7049515
+    },
+    "series": {
+      "file": "series.json",
+      "count": 2456,
+      "bytes": 928325
+    },
+    "anime": {
+      "file": "animes.json",
+      "count": 2704,
+      "bytes": 1114099
+    }
+  }
+}

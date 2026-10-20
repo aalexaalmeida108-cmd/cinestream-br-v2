@@ -3,33 +3,101 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Streaming Site</title>
+  <meta name="description" content="Browse and watch movies, series and anime. Catalog data from EmbedMovies, playback by MyEmbed.">
+  <meta name="theme-color" content="#0b0d10">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta property="og:title" content="CineStream — Movies, Series & Anime">
+  <meta property="og:description" content="Browse and watch movies, series and anime in one place.">
+  <meta property="og:type" content="website">
+  <title>CineStream — Movies, Series &amp; Anime</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header class="header">
-    <div class="container">
-      <h1 class="logo"> streaming </h1>
-      <form class="search-form" id="searchForm">
-        <input type="text" id="searchInput" placeholder="Search movies, series or animes..." class="search-input">
-        <button type="submit" class="search-btn">Search</button>
+  <a class="skip-link" href="#catalog">Skip to catalog</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="./" aria-label="CineStream home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+            <path d="M10 9.5v5l4-2.5-4-2.5Z" fill="currentColor" stroke="none"></path>
+          </svg>
+        </span>
+        <span class="brand-name">CINE<span>STREAM</span></span>
+      </a>
+
+      <form class="search" id="searchForm" role="search" autocomplete="off">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="m20 20-3.5-3.5"></path>
+        </svg>
+        <input
+          type="search"
+          id="searchInput"
+          class="search-input"
+          placeholder="Search movies..."
+          aria-label="Search the catalog"
+          spellcheck="false"
+        >
+        <button type="button" class="search-clear" id="searchClear" aria-label="Clear search" hidden>&times;</button>
       </form>
     </div>
   </header>
 
-  <nav class="filters">
-    <div class="container">
-      <button class="filter-btn active" data-category="filmes">Movies</button>
-      <button class="filter-btn" data-category="series">Series</button>
-      <button class="filter-btn" data-category="animes">Animes</button>
+  <nav class="catalog-nav" aria-label="Catalog categories">
+    <div class="container nav-inner">
+      <div class="tabs" role="tablist" aria-label="Categories">
+        <button class="tab is-active" type="button" role="tab" aria-selected="true" data-category="movies">
+          Movies <span class="tab-count" data-count="movies"></span>
+        </button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-category="series">
+          Series <span class="tab-count" data-count="series"></span>
+        </button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-category="animes">
+          Anime <span class="tab-count" data-count="animes"></span>
+        </button>
+      </div>
+
+      <div class="toolbar">
+        <span class="result-count" id="resultCount" aria-live="polite"></span>
+        <label class="sort-control">
+          <span>Sort</span>
+          <select id="sortSelect">
+            <option value="popular">Most popular</option>
+            <option value="rating">Top rated</option>
+            <option value="newest">Newest</option>
+            <option value="title">A&ndash;Z</option>
+          </select>
+        </label>
+      </div>
     </div>
   </nav>
 
-  <main class="container">
-    <div id="message" class="message"></div>
-    <div class="content-grid" id="contentGrid"></div>
+  <main class="container" id="catalog">
+    <div class="notice" id="notice" role="status" hidden></div>
+    <section class="grid" id="grid" aria-busy="true"></section>
+    <div class="load-more-wrap">
+      <button class="load-more" id="loadMore" type="button" hidden>Load more</button>
+      <p class="end-note" id="endNote" hidden>You have reached the end of this list.</p>
+    </div>
   </main>
 
-  <script src="js/app.js"></script>
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>
+        Catalog data from <a href="https://embedmovies.org/" target="_blank" rel="noopener noreferrer">EmbedMovies</a>.
+        Playback by <a href="https://myembed.biz/" target="_blank" rel="noopener noreferrer">MyEmbed</a>.
+        This site does not host any media.
+      </p>
+    </div>
+  </footer>
+
+  <noscript>
+    <div class="container"><p class="notice error">This catalog needs JavaScript enabled.</p></div>
+  </noscript>
+
+  <script src="js/app.js" defer></script>
 </body>
 </html>
