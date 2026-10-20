@@ -1,5 +1,7 @@
 # CineStream
 
+Live site: <https://aalexaalmeida108-cmd.github.io/cinestream-br-v2/>
+
 A static catalog browser for [EmbedMovies](https://embedmovies.org/) with playback through
 [MyEmbed](https://myembed.biz/). Movies, series and anime are searchable and sortable, and every
 title opens in a dedicated watch page with a season/episode selector for series.
