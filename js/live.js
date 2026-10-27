@@ -1,12 +1,19 @@
-// CineStream — Plex FAST Live TV.
-// Protocol (every hop is CORS-open; token travels in the query string so no
-// preflight is needed after the first anonymous-user call):
+// CineStream — free live TV, two sources.
+//
+// Plex (all hops CORS-open; token travels in the query string so no preflight
+// is needed after the first anonymous-user call):
 //   1. POST clients.plex.tv/api/v2/users/anonymous  -> authToken + client id
 //   2. GET  epg.provider.plex.tv/lineups/plex/channels?X-Plex-Token=…  -> channels
 //   3. POST epg.provider.plex.tv/channels/<channelId>/tune  -> current program
 //   4. GET  epg.provider.plex.tv/library/parts/<channelId>.m3u8?X-Plex-Token=…
 //      -> master playlist; variant playlists already carry signed segment URLs
 //      (Amagi SSAI, 240p..1080p) so hls.js needs nothing else.
+//
+// Pluto TV (one JSON call carries channels + EPG + playable URL):
+//   1. GET api.pluto.tv/v2/channels?start=…&stop=…   (CORS pinned to pluto.tv)
+//   2. GET channel.stitched.urls[0].url              (CORS pinned to pluto.tv)
+//   3. segments + AES keys live on siloh-ns1.plutotv.net and are CORS `*`.
+// Only hops 1-2 need the proxy in worker/pluto-proxy.js; see PLUTO.proxy.
 
 'use strict';
 
@@ -20,6 +27,17 @@ const PLEX = {
   // Used only when creating a fresh anonymous session fails (rate limit, offline DNS).
   fallbackToken: 'yGAXbikxzzg9vLvcZxRw',
   fallbackClientId: '5154213f-d6e3-4ab9-b7fb-c6e890d5d971'
+};
+
+// Set by live.html (`window.CINESTREAM_PLUTO_PROXY`) or `?proxy=` for testing.
+const PLUTO_PROXY = String(
+  new URLSearchParams(location.search).get('proxy') || window.CINESTREAM_PLUTO_PROXY || ''
+).replace(/\/+$/, '');
+
+const PLUTO = {
+  api: 'https://api.pluto.tv',
+  proxy: PLUTO_PROXY,
+  enabled: !!PLUTO_PROXY
 };
 
 const STORE_KEY = 'cinestream:plex:v1';
@@ -58,8 +76,14 @@ const LANGS = [
 ];
 
 const state = {
+  source: 'plex',
   session: null,
   channels: [],
+  plexChannels: [],
+  plutoChannels: [],
+  categories: [],
+  counts: { plex: 0, pluto: 0 },
+  loaded: { plex: false, pluto: false },
   byId: new Map(),
   genreMap: null,
   airings: new Map(),
@@ -85,6 +109,7 @@ async function init() {
   el.grid = document.getElementById('liveGrid');
   el.notice = document.getElementById('liveNotice');
   el.count = document.getElementById('liveCount');
+  el.sources = document.getElementById('liveSources');
   el.search = document.getElementById('liveSearch');
   el.searchClear = document.getElementById('liveSearchClear');
   el.genreBar = document.getElementById('liveGenres');
@@ -105,6 +130,7 @@ async function init() {
   el.overlayNext = document.getElementById('liveOverlayNext');
   el.unmute = document.getElementById('liveUnmute');
 
+  buildSources();
   buildFilters();
   bindEvents();
   await boot();
@@ -247,15 +273,23 @@ async function loadLineup() {
   const body = await response.json();
   const list = (body.MediaContainer && body.MediaContainer.Channel) || [];
 
-  state.channels = list
+  const channels = list
     .map(normalizeChannel)
     .filter((channel) => channel && channel.streamKey)
     .sort((left, right) => collator.compare(left.title, right.title));
-  state.byId = new Map(state.channels.map((channel) => [channel.id, channel]));
 
-  if (!state.channels.length) throw new Error('lineup was empty');
+  if (!channels.length) throw new Error('lineup was empty');
 
-  el.count.textContent = `${state.channels.length} channels`;
+  state.plexChannels = channels;
+  state.counts.plex = channels.length;
+  state.loaded.plex = true;
+  buildSources();
+
+  if (state.source !== 'plex') return;
+  state.channels = channels;
+  state.byId = new Map(channels.map((channel) => [channel.id, channel]));
+  buildFilters();
+  el.count.textContent = `${channels.length} channels`;
   render();
 }
 
@@ -282,6 +316,147 @@ function normalizeChannel(raw) {
     protocol: media.protocol || 'hls',
     resolution: media.videoResolution || ''
   };
+}
+
+/* ------------------------------------------------------------------ pluto */
+
+// Pluto's API and stitcher pin CORS to pluto.tv, so both go through the
+// path-style proxy: https://<proxy>/p/<host>/<path>?<query>.
+function proxied(target) {
+  const url = new URL(target);
+  return `${PLUTO.proxy}/p/${url.host}${url.pathname}${url.search}`;
+}
+
+// The stitcher URL arrives with empty device/app parameters and answers 400
+// ("missing plutotv-device-model header or deviceModel query param") until they
+// are filled in. `clientTime` keeps the signed URLs from looking stale.
+function plutoUrl(channel) {
+  const url = new URL(channel.playUrl);
+  const filled = {
+    deviceModel: 'web',
+    deviceMake: 'chrome',
+    deviceType: 'web',
+    appName: 'web',
+    appVersion: '5.0',
+    deviceVersion: '1.0',
+    architecture: 'x86',
+    buildVersion: '1.0.0',
+    sid: '0000',
+    userId: '0000',
+    advertisingId: '00000000-0000-4000-8000-000000000000',
+    deviceId: '00000000-0000-4000-8000-000000000000',
+    clientTime: String(Date.now())
+  };
+  Object.entries(filled).forEach(([key, value]) => {
+    const current = url.searchParams.get(key);
+    if (!current || current === 'unknown') url.searchParams.set(key, value);
+  });
+  return proxied(url.toString());
+}
+
+async function loadPluto() {
+  const start = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const stop = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+  const target = `${PLUTO.api}/v2/channels?start=${encodeURIComponent(start)}&stop=${encodeURIComponent(stop)}`;
+
+  const response = await fetch(proxied(target), { headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new Error(`pluto HTTP ${response.status}`);
+  const list = await response.json();
+
+  const channels = (Array.isArray(list) ? list : [])
+    .map(normalizePluto)
+    .filter(Boolean)
+    .sort((left, right) => collator.compare(left.title, right.title));
+
+  if (!channels.length) throw new Error('pluto lineup was empty');
+
+  state.plutoChannels = channels;
+  state.counts.pluto = channels.length;
+  state.loaded.pluto = true;
+  state.categories = [...new Set(channels.flatMap((channel) => channel.categories))].sort(collator.compare);
+  seedPlutoAirings(channels);
+  buildSources();
+
+  if (state.source !== 'pluto') return;
+  state.channels = channels;
+  state.byId = new Map(channels.map((channel) => [channel.id, channel]));
+  buildFilters();
+  el.count.textContent = `${channels.length} channels`;
+  render();
+}
+
+function normalizePluto(raw) {
+  if (!raw || typeof raw._id !== 'string') return null;
+  const urls = (raw.stitched && raw.stitched.urls) || [];
+  const hls = urls.find((entry) => entry && entry.type === 'hls' && entry.url);
+  if (!hls) return null;
+
+  const logo = (raw.colorLogoPNG && raw.colorLogoPNG.path) || (raw.logo && raw.logo.path) || '';
+  const art = (raw.featuredImage && raw.featuredImage.path) || (raw.tile && raw.tile.path) || logo;
+
+  return {
+    id: raw._id,
+    epgKey: raw._id,
+    slug: raw.slug || raw._id,
+    title: raw.name || raw.slug || 'Channel',
+    summary: raw.summary || '',
+    thumb: logo,
+    art,
+    language: 'pt',
+    hd: true,
+    number: raw.number || 0,
+    categories: [raw.category].filter(Boolean),
+    playUrl: hls.url,
+    timelines: Array.isArray(raw.timelines) ? raw.timelines : []
+  };
+}
+
+// "Police Interceptors: Episode 7" + subtitle "Episode 7" would print the same
+// fragment twice; drop a subtitle the title already contains.
+function cleanSubtitle(title, subtitle) {
+  const sub = String(subtitle || '').trim();
+  if (!sub) return '';
+  const flat = String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const needle = sub.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return needle && flat.includes(needle) ? '' : sub;
+}
+
+function epgSubtitle(item) {
+  const name = (item.episode && item.episode.name) || '';
+  return name && name.trim().toLowerCase() !== String(item.title || '').trim().toLowerCase() ? name : '';
+}
+
+function epgSummary(item) {
+  const description = (item.episode && item.episode.description) || '';
+  return /^no info/i.test(description) ? '' : description;
+}
+
+// Pluto ships the guide with the lineup, so cards and the overlay can be fed
+// from the same shape the Plex airing cache uses.
+function seedPlutoAirings(channels) {
+  const now = Date.now();
+  channels.forEach((channel) => {
+    const list = channel.timelines;
+    if (!list.length) return;
+    let index = list.findIndex(
+      (item) => Date.parse(item.start) <= now && Date.parse(item.stop) > now
+    );
+    if (index < 0) index = 0;
+    const current = list[index] || {};
+    const upcoming = list[index + 1];
+    if (!current.start) return;
+    state.airings.set(channel.id, {
+      at: now,
+      now: {
+        title: current.title || channel.title,
+        subtitle: epgSubtitle(current),
+        summary: epgSummary(current),
+        beginsAt: Date.parse(current.start) / 1000 || 0,
+        endsAt: Date.parse(current.stop) / 1000 || 0
+      },
+      next: upcoming ? { title: upcoming.title || '' } : null
+    });
+  });
 }
 
 /* ----------------------------------------------------------------- genres */
@@ -326,14 +501,89 @@ async function genreSet(genre) {
 
 /* ------------------------------------------------------------------- grid */
 
+function buildSources() {
+  if (!el.sources) return;
+  const entries = [['plex', 'Plex']];
+  if (PLUTO.enabled) entries.push(['pluto', 'Pluto TV']);
+
+  el.sources.replaceChildren(
+    ...entries.map(([key, label]) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'live-source' + (key === state.source ? ' is-active' : '');
+      button.dataset.source = key;
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-selected', key === state.source ? 'true' : 'false');
+      const count = state.counts[key];
+      button.textContent = count ? `${label} · ${count}` : label;
+      button.addEventListener('click', () => switchSource(key));
+      return button;
+    })
+  );
+  el.sources.hidden = entries.length < 2;
+}
+
+async function switchSource(name) {
+  // Clicking the active tab retries a source that failed to load.
+  if (name === state.source && state.loaded[name]) return;
+  if (name === 'pluto' && !state.loaded.pluto) {
+    state.source = 'pluto';
+    state.genre = 'all';
+    state.lang = 'all';
+    state.query = '';
+    el.search.value = '';
+    el.searchClear.hidden = true;
+    state.channels = [];
+    state.byId = new Map();
+    buildSources();
+    buildFilters();
+    el.count.textContent = 'Loading…';
+    el.grid.replaceChildren();
+    showNotice('Loading Pluto TV…', 'info');
+    try {
+      await loadPluto();
+      hideNotice();
+    } catch (error) {
+      showNotice(`Could not reach Pluto TV. ${error.message}.`, 'error');
+    }
+    return;
+  }
+
+  state.source = name;
+  state.genre = 'all';
+  state.lang = 'all';
+  state.query = '';
+  el.search.value = '';
+  el.searchClear.hidden = true;
+
+  const channels = name === 'pluto' ? state.plutoChannels : state.plexChannels;
+  state.channels = channels;
+  state.byId = new Map(channels.map((channel) => [channel.id, channel]));
+  buildSources();
+  buildFilters();
+  render();
+}
+
 function buildFilters() {
+  const pluto = state.source === 'pluto';
+  const list = pluto
+    ? [['all', 'Todos']].concat(state.categories.map((category) => [category, category]))
+    : GENRES;
+
   el.genreBar.replaceChildren(
-    ...GENRES.map(([key, label]) => chip(key, label, key === state.genre, (value) => {
+    ...list.map(([key, label]) => chip(key, label, key === state.genre, (value) => {
       state.genre = value;
       syncChips(el.genreBar, value);
       render();
     }))
   );
+
+  // Pluto BR is Portuguese-only, so the language row has nothing to filter.
+  el.langBar.hidden = pluto;
+  if (pluto) {
+    el.langBar.replaceChildren();
+    return;
+  }
   el.langBar.replaceChildren(
     ...LANGS.map(([key, label]) => chip(key, label, key === state.lang, (value) => {
       state.lang = value;
@@ -375,10 +625,22 @@ function matches(channel) {
 
 async function render() {
   let allowed = null;
-  try {
-    allowed = await genreSet(state.genre);
-  } catch (_) {
-    allowed = null; // keep the full lineup rather than an empty page
+  if (state.source === 'pluto') {
+    // The Pluto lineup already carries its own category, so filter locally
+    // instead of asking the Plex genre endpoint.
+    allowed = state.genre === 'all'
+      ? null
+      : new Set(
+        state.channels
+          .filter((channel) => channel.categories.includes(state.genre))
+          .map((channel) => channel.id)
+      );
+  } else {
+    try {
+      allowed = await genreSet(state.genre);
+    } catch (_) {
+      allowed = null; // keep the full lineup rather than an empty page
+    }
   }
   const visible = state.channels.filter(
     (channel) => (!allowed || allowed.has(channel.id)) && matches(channel)
@@ -399,6 +661,9 @@ async function render() {
   const fragment = document.createDocumentFragment();
   visible.forEach((channel) => fragment.appendChild(channelCard(channel)));
   el.grid.replaceChildren(fragment);
+  // Pluto ships its guide with the lineup, so paint every card now instead of
+  // waiting for the intersection observer to fetch one by one.
+  if (state.source === 'pluto') visible.forEach((channel) => paintAiring(channel.id));
   observeCards();
 }
 
@@ -525,6 +790,12 @@ function writeAiringCache() {
 }
 
 async function loadAiring(channelId) {
+  if (state.source === 'pluto') {
+    paintAiring(channelId);
+    const record = state.airings.get(channelId);
+    return (record && record.now) || null;
+  }
+
   const cached = state.airings.get(channelId);
   if (cached && Date.now() - cached.at < AIRING_TTL) {
     paintAiring(channelId);
@@ -616,6 +887,13 @@ async function openChannel(channel) {
   el.overlay.hidden = false;
   document.body.classList.add('live-playing');
 
+  if (!el.video.dataset.qualityBound) {
+    el.video.dataset.qualityBound = '1';
+    el.video.addEventListener('loadedmetadata', paintQuality);
+    el.video.addEventListener('playing', paintQuality);
+    el.video.addEventListener('resize', paintQuality);
+  }
+
   if (channel.thumb) {
     el.overlayLogo.src = channel.thumb;
     el.overlayLogo.hidden = false;
@@ -641,8 +919,9 @@ function closeOverlay() {
 }
 
 async function startPlayback(channel) {
-  const session = state.session || (await resolveSession());
-  const master = `${PLEX.epg}/library/parts/${encodeURIComponent(channel.id)}.m3u8?${tokenQuery(session)}`;
+  const master = state.source === 'pluto'
+    ? plutoUrl(channel)
+    : `${PLEX.epg}/library/parts/${encodeURIComponent(channel.id)}.m3u8?${tokenQuery(state.session || (await resolveSession()))}`;
 
   await loadHls();
 
@@ -673,10 +952,6 @@ async function startPlayback(channel) {
   });
   state.hls = hls;
 
-  hls.on(window.Hls.Events.MEDIA_ATTACHED, () => {
-    hls.loadSource(master);
-  });
-
   hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
     el.overlayError.hidden = true;
     autoplay();
@@ -685,6 +960,7 @@ async function startPlayback(channel) {
   hls.on(window.Hls.Events.LEVEL_SWITCHED, (_, data) => {
     const level = hls.levels[data.level];
     if (level && level.height) el.overlayQuality.textContent = `${level.height}p`;
+    else paintQuality();
   });
 
   hls.on(window.Hls.Events.ERROR, (_, data) => {
@@ -708,12 +984,19 @@ async function startPlayback(channel) {
     el.overlayError.textContent = 'This channel stopped responding. Press Retry.';
   });
 
+  // Loading right after attachMedia avoids depending on MEDIA_ATTACHED, which
+  // hls.js only emits once the MediaSource opens (and never does in a hidden tab).
   hls.attachMedia(el.video);
+  hls.loadSource(master);
 
   await tune(channel);
 }
 
 async function tune(channel) {
+  if (state.source === 'pluto') {
+    applyPlutoProgram(channel);
+    return;
+  }
   try {
     const session = state.session;
     const response = await fetch(
@@ -755,7 +1038,34 @@ async function tune(channel) {
   }
 }
 
+// Pluto's guide came with the lineup, so the overlay is filled from the local
+// airing record; no second request and no retune (the stream never changes).
+function applyPlutoProgram(channel) {
+  const record = state.airings.get(channel.id);
+  const now = record && record.now;
+  if (!now) return;
+
+  const heading = (el.overlayTitle.textContent || channel.title).trim().toLowerCase();
+  const duplicate = (now.title || '').trim().toLowerCase() === heading;
+  const sub = cleanSubtitle(now.title, now.subtitle);
+  el.overlayProgram.textContent = duplicate
+    ? sub || now.title || channel.title
+    : now.title || channel.title;
+  el.overlaySub.textContent = duplicate ? '' : sub;
+  state.program = { beginsAt: now.beginsAt, endsAt: now.endsAt, title: now.title };
+  tickProgress();
+}
+
 async function refreshAiring(channel) {
+  if (state.source === 'pluto') {
+    const record = state.airings.get(channel.id);
+    if (record && record.now && record.now.endsAt * 1000 < Date.now()) {
+      seedPlutoAirings([channel]);
+      paintAiring(channel.id);
+      if (state.channel && state.channel.id === channel.id) applyPlutoProgram(channel);
+    }
+  }
+
   const now = await loadAiring(channel.id);
   if (!now) return;
   if (!state.channel || state.channel.id !== channel.id) return;
@@ -764,10 +1074,11 @@ async function refreshAiring(channel) {
   // h2), which would print the same string twice. Demote it to the subtitle.
   const heading = (el.overlayTitle.textContent || channel.title).trim().toLowerCase();
   const duplicate = (now.title || '').trim().toLowerCase() === heading;
+  const sub = cleanSubtitle(now.title, now.subtitle);
   el.overlayProgram.textContent = duplicate
-    ? now.subtitle || now.title || el.overlayProgram.textContent
+    ? sub || now.title || el.overlayProgram.textContent
     : now.title || el.overlayProgram.textContent;
-  el.overlaySub.textContent = duplicate ? '' : now.subtitle || el.overlaySub.textContent;
+  el.overlaySub.textContent = duplicate ? '' : sub || el.overlaySub.textContent;
 
   const record = state.airings.get(channel.id);
   const nextTitle = record && record.next && record.next.title;
@@ -789,6 +1100,17 @@ function tickProgress() {
   };
   draw();
   state.progressTimer = window.setInterval(draw, 15000);
+}
+
+// Pluto's master lists bitrates without RESOLUTION, so hls.js reports height 0;
+// read the decoded size from the element instead.
+function paintQuality() {
+  const height = el.video.videoHeight;
+  if (!height) return;
+  // 1216x684 is Pluto's "720p" rung; snap to the familiar ladder label.
+  const ladder = [1080, 720, 576, 540, 480, 360, 240];
+  const near = ladder.find((step) => Math.abs(step - height) <= 40);
+  el.overlayQuality.textContent = `${near || height}p`;
 }
 
 function autoplay() {

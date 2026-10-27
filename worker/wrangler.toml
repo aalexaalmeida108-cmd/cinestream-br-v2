@@ -1,0 +1,6 @@
+name = "cinestream-pluto-proxy"
+main = "pluto-proxy.js"
+compatibility_date = "2026-10-01"
+
+# The worker is public and CORS-open by design; it can only reach *.pluto.tv
+# and *.plutotv.net, so it is useless as an open relay.

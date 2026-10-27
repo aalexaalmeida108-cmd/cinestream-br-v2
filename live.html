@@ -58,8 +58,8 @@
         <p class="eyebrow">Live TV</p>
         <h1>Free channels, always on</h1>
         <p class="live-hero-sub">
-          Movies, sports, news, comedy and kids — 260 channels streaming 24/7.
-          Pick one and it starts where the broadcast is now.
+          Movies, sports, news, comedy and kids — hundreds of channels streaming
+          24/7. Pick one and it starts where the broadcast is now.
         </p>
       </div>
       <div class="live-hero-side">
@@ -77,6 +77,7 @@
     <div class="notice" id="liveNotice" role="status" hidden></div>
 
     <div class="live-filters">
+      <div class="live-sources" id="liveSources" role="tablist" aria-label="Channel source" hidden></div>
       <div class="live-chip-row" id="liveGenres" role="group" aria-label="Filter by genre"></div>
       <div class="live-chip-row live-chip-row-lang" id="liveLangs" role="group" aria-label="Filter by language"></div>
     </div>
@@ -87,7 +88,7 @@
   <footer class="site-footer">
     <div class="container footer-inner">
       <p>
-        Live channels carried by Plex free-to-air TV. This site does not host any media.
+        Live channels carried by Plex and Pluto TV free-to-air services. This site does not host any media.
       </p>
     </div>
   </footer>
@@ -137,6 +138,8 @@
     <div class="container"><p class="notice error">Live TV needs JavaScript enabled.</p></div>
   </noscript>
 
+  <!-- Pluto TV needs the manifest proxy in worker/pluto-proxy.js. Paste its URL here. -->
+  <script>window.CINESTREAM_PLUTO_PROXY = 'https://cinestream-pluto-proxy.claudia-ingles.workers.dev';</script>
   <script src="js/live.js" defer></script>
 </body>
 </html>

@@ -118,6 +118,45 @@
   font-size: 0.82rem;
 }
 
+/* Source switcher: sits above the genre chips, one pill per lineup. */
+
+.live-sources {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+}
+
+.live-source {
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted, #a3a3a3);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.live-source:hover {
+  color: var(--text, #fff);
+}
+
+.live-source.is-active {
+  background: var(--accent, #e50914);
+  color: #fff;
+}
+
+.live-sources[hidden] {
+  display: none;
+}
+
 /* ------------------------------------------------------------------- grid */
 
 .live-grid {
