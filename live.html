@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Watch 260 free live TV channels on CineStream — movies, sports, news, comedy and more, streaming 24/7.">
+  <meta name="theme-color" content="#0b0d10">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Live TV — CineStream</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/live.css">
+</head>
+<body class="live-page">
+  <a class="skip-link" href="#liveGrid">Skip to channels</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="./" aria-label="CineStream home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+            <path d="M10 9.5v5l4-2.5-4-2.5Z" fill="currentColor" stroke="none"></path>
+          </svg>
+        </span>
+        <span class="brand-name">CINE<span>STREAM</span></span>
+      </a>
+
+      <form class="search" id="liveSearchForm" role="search" autocomplete="off">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="m20 20-3.5-3.5"></path>
+        </svg>
+        <input
+          type="search"
+          id="liveSearch"
+          class="search-input"
+          placeholder="Search live channels..."
+          aria-label="Search live channels"
+          spellcheck="false"
+        >
+        <button type="button" class="search-clear" id="liveSearchClear" aria-label="Clear search" hidden>&times;</button>
+      </form>
+
+      <a class="back-link live-back" href="./" aria-label="Back to catalog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M19 12H5"></path>
+          <path d="m11 18-6-6 6-6"></path>
+        </svg>
+        <span>Catalog</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="container live-main">
+    <div class="live-hero">
+      <div class="live-hero-copy">
+        <p class="eyebrow">Live TV</p>
+        <h1>Free channels, always on</h1>
+        <p class="live-hero-sub">
+          Movies, sports, news, comedy and kids — 260 channels streaming 24/7.
+          Pick one and it starts where the broadcast is now.
+        </p>
+      </div>
+      <div class="live-hero-side">
+        <span class="live-count" id="liveCount">Loading…</span>
+        <button class="btn btn-ghost live-refresh" id="liveRefresh" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-3.3-7"></path>
+            <path d="M21 3v6h-6"></path>
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="notice" id="liveNotice" role="status" hidden></div>
+
+    <div class="live-filters">
+      <div class="live-chip-row" id="liveGenres" role="group" aria-label="Filter by genre"></div>
+      <div class="live-chip-row live-chip-row-lang" id="liveLangs" role="group" aria-label="Filter by language"></div>
+    </div>
+
+    <section class="live-grid" id="liveGrid" aria-busy="false" aria-label="Live channels"></section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>
+        Live channels carried by Plex free-to-air TV. This site does not host any media.
+      </p>
+    </div>
+  </footer>
+
+  <div class="live-overlay" id="liveOverlay" role="dialog" aria-modal="true" aria-label="Live player" hidden>
+    <div class="live-stage">
+      <video id="liveVideo" class="live-video" playsinline controls autoplay></video>
+
+      <div class="live-stage-top">
+        <button class="live-close" id="liveOverlayClose" type="button" aria-label="Close player">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12"></path>
+          </svg>
+        </button>
+        <span class="live-badge live-badge-stage"><span class="live-dot"></span>LIVE</span>
+        <span class="live-quality" id="liveOverlayQuality"></span>
+        <span class="live-stage-channel" id="liveOverlayChannel"></span>
+      </div>
+
+      <div class="live-stage-info">
+        <img class="live-stage-logo" id="liveOverlayLogo" alt="" hidden>
+        <div class="live-stage-text">
+          <h2 id="liveOverlayTitle">Channel</h2>
+          <p class="live-program" id="liveOverlayProgram">Tuning in…</p>
+          <p class="live-program-sub" id="liveOverlaySub"></p>
+        </div>
+        <p class="live-next" id="liveOverlayNext"></p>
+      </div>
+
+      <div class="live-progress"><span id="liveOverlayProgress"></span></div>
+
+      <button class="live-unmute" id="liveUnmute" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
+          <path d="M16 9a4 4 0 0 1 0 6"></path>
+          <path d="M19 6a8 8 0 0 1 0 12"></path>
+        </svg>
+        <span>Sound off — tap to unmute</span>
+      </button>
+
+      <div class="live-stage-error" id="liveOverlayError" hidden></div>
+      <button class="btn live-retry" id="liveOverlayRetry" type="button">Retry</button>
+    </div>
+  </div>
+
+  <noscript>
+    <div class="container"><p class="notice error">Live TV needs JavaScript enabled.</p></div>
+  </noscript>
+
+  <script src="js/live.js" defer></script>
+</body>
+</html>

@@ -990,3 +990,49 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Live TV entry point in the header (added with the live section). */
+.header-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 9px 15px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 999px;
+  transform: translateZ(0);
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.header-live:hover {
+  color: #fff;
+  background: rgba(220, 38, 38, 0.24);
+  border-color: rgba(248, 113, 113, 0.65);
+}
+
+.header-live-dot {
+  width: 7px;
+  height: 7px;
+  background: #ef4444;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22);
+}
+
+@media (max-width: 720px) {
+  /* Keep the live pill beside the brand instead of stranding it on its own
+     row below the full-width search field. */
+  .header-live {
+    order: 2;
+    margin-left: auto;
+    padding: 7px 11px;
+    font-size: 0.74rem;
+  }
+
+  .site-header .search {
+    order: 3;
+  }
+}
