@@ -1,4 +1,7 @@
-// CineStream — free live TV, two sources.
+// CineStream — free live TV, three sources.
+//
+// Local (same-origin HLS originators from /api/tv/channels; no CORS, no token):
+//   GET /api/tv/channels -> [{ id, name, streamUrl }] with streamUrl under /live/*.
 //
 // Plex (all hops CORS-open; token travels in the query string so no preflight
 // is needed after the first anonymous-user call):
@@ -9,11 +12,14 @@
 //      -> master playlist; variant playlists already carry signed segment URLs
 //      (Amagi SSAI, 240p..1080p) so hls.js needs nothing else.
 //
-// Pluto TV (one JSON call carries channels + EPG + playable URL):
-//   1. GET api.pluto.tv/v2/channels?start=…&stop=…   (CORS pinned to pluto.tv)
-//   2. GET channel.stitched.urls[0].url              (CORS pinned to pluto.tv)
-//   3. segments + AES keys live on siloh-ns1.plutotv.net and are CORS `*`.
-// Only hops 1-2 need the proxy in worker/pluto-proxy.js; see PLUTO.proxy.
+// Pluto TV (boot issues a JWT that the stitcher now requires — without it every
+// channel returns the looping takedown slate):
+//   1. GET boot.pluto.tv/v4/start?…            -> sessionToken (JWT), stitcher, stitcherParams
+//   2. GET api.pluto.tv/v2/channels?start=…&stop=…   (CORS pinned to pluto.tv)
+//   3. GET <stitcher>/v2/stitch/hls/channel/<id>/master.m3u8?jwt=…&masterJWTPassthrough=true&<stitcherParams>
+//   4. segments + AES keys live on siloh-ns1.plutotv.net and are CORS `*`.
+// All three hops go through the path-style proxy; see PLUTO.proxy.
+// Boot is cached until refreshInSec (~8h) and force-refreshed on fatal errors.
 
 'use strict';
 
@@ -36,9 +42,31 @@ const PLUTO_PROXY = String(
 
 const PLUTO = {
   api: 'https://api.pluto.tv',
+  boot: 'https://boot.pluto.tv',
   proxy: PLUTO_PROXY,
   enabled: !!PLUTO_PROXY
 };
+
+// Boot session (JWT + stitcher base + stitcherParams). Refreshed before it
+// expires; force-refresh retries clear it so the next plutoUrl re-boots.
+let plutoSession = null;
+
+// Stable anonymous client id so boot does not mint a new device every play.
+function plutoClientId() {
+  try {
+    const key = 'cinestream:pluto:device';
+    let id = localStorage.getItem(key);
+    if (!id) {
+      id =
+        (crypto.randomUUID && crypto.randomUUID()) ||
+        `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem(key, id);
+    }
+    return id;
+  } catch {
+    return '00000000-0000-4000-8000-000000000000';
+  }
+}
 
 const STORE_KEY = 'cinestream:plex:v1';
 const GENRE_KEY = 'cinestream:genres:v1';
@@ -76,14 +104,15 @@ const LANGS = [
 ];
 
 const state = {
-  source: 'plex',
+  source: 'local',
   session: null,
   channels: [],
+  localChannels: [],
   plexChannels: [],
   plutoChannels: [],
   categories: [],
-  counts: { plex: 0, pluto: 0 },
-  loaded: { plex: false, pluto: false },
+  counts: { local: 0, plex: 0, pluto: 0 },
+  loaded: { local: false, plex: false, pluto: false },
   byId: new Map(),
   genreMap: null,
   airings: new Map(),
@@ -205,17 +234,87 @@ function seedAirings() {
 
 async function boot(force) {
   seedAirings();
-  showNotice('Connecting to Plex…', 'info');
+  showNotice('Loading local channels…', 'info');
+  try {
+    await loadLocal();
+    hideNotice();
+  } catch (error) {
+    state.source = 'plex';
+    buildSources();
+    showNotice(`Local channels unavailable. ${error.message}.`, 'error');
+  }
+
+  // Plex stays available as a second tab; failures do not block Local.
   try {
     state.session = await resolveSession(force);
     await loadLineup();
-    hideNotice();
+    if (state.source === 'local') hideNotice();
   } catch (error) {
-    showNotice(
-      `Could not reach Plex Live TV. ${error.message}. Use Refresh to try again.`,
-      'error'
-    );
+    if (state.source !== 'local') {
+      showNotice(
+        `Could not reach Plex Live TV. ${error.message}. Use Refresh to try again.`,
+        'error'
+      );
+    }
   }
+}
+
+/* ------------------------------------------------------------------ local */
+
+function normalizeLocal(raw) {
+  if (!raw || !raw.id || !raw.streamUrl) return null;
+  return {
+    id: String(raw.id),
+    epgKey: String(raw.id),
+    slug: String(raw.id),
+    title: raw.name || String(raw.id),
+    summary: raw.summary || 'Local HLS feed',
+    thumb: raw.thumb || '',
+    art: raw.art || '',
+    language: raw.language || 'pt',
+    hd: true,
+    streamKey: String(raw.streamUrl),
+    playUrl: String(raw.streamUrl),
+    local: true
+  };
+}
+
+async function loadLocal() {
+  const response = await fetch('/api/tv/channels', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`local HTTP ${response.status}`);
+  const list = await response.json();
+  const channels = (Array.isArray(list) ? list : [])
+    .map(normalizeLocal)
+    .filter(Boolean)
+    .sort((left, right) => collator.compare(left.title, right.title));
+
+  if (!channels.length) throw new Error('no local channels');
+
+  state.localChannels = channels;
+  state.counts.local = channels.length;
+  state.loaded.local = true;
+  state.categories = [];
+  channels.forEach((channel) => {
+    state.airings.set(channel.id, {
+      at: Date.now(),
+      now: {
+        title: channel.title,
+        subtitle: 'Local feed',
+        summary: channel.summary,
+        beginsAt: 0,
+        endsAt: 0
+      },
+      next: null
+    });
+  });
+  buildSources();
+
+  if (state.source !== 'local') return;
+  state.channels = channels;
+  state.byId = new Map(channels.map((channel) => [channel.id, channel]));
+  buildFilters();
+  el.count.textContent = `${channels.length} channels`;
+  render();
 }
 
 async function resolveSession(force) {
@@ -320,38 +419,69 @@ function normalizeChannel(raw) {
 
 /* ------------------------------------------------------------------ pluto */
 
-// Pluto's API and stitcher pin CORS to pluto.tv, so both go through the
-// path-style proxy: https://<proxy>/p/<host>/<path>?<query>.
+// Pluto's API, boot and stitcher pin CORS to pluto.tv, so all three go through
+// the path-style proxy: https://<proxy>/p/<host>/<path>?<query>.
 function proxied(target) {
   const url = new URL(target);
   return `${PLUTO.proxy}/p/${url.host}${url.pathname}${url.search}`;
 }
 
-// The stitcher URL arrives with empty device/app parameters and answers 400
-// ("missing plutotv-device-model header or deviceModel query param") until they
-// are filled in. `clientTime` keeps the signed URLs from looking stale.
-function plutoUrl(channel) {
-  const url = new URL(channel.playUrl);
-  const filled = {
-    deviceModel: 'web',
-    deviceMake: 'chrome',
-    deviceType: 'web',
+// POST-free boot: /v4/start returns sessionToken (JWT), servers.stitcher and
+// stitcherParams. Stitcher rejects any master.m3u8 without the JWT (returns
+// only the "not available on this device" slate).
+async function plutoBoot(force = false) {
+  const now = Date.now();
+  if (!force && plutoSession && plutoSession.expiresAt > now + 5 * 60 * 1000) {
+    return plutoSession;
+  }
+
+  const clientID = plutoClientId();
+  const query = new URLSearchParams({
     appName: 'web',
-    appVersion: '5.0',
-    deviceVersion: '1.0',
-    architecture: 'x86',
-    buildVersion: '1.0.0',
-    sid: '0000',
-    userId: '0000',
-    advertisingId: '00000000-0000-4000-8000-000000000000',
-    deviceId: '00000000-0000-4000-8000-000000000000',
-    clientTime: String(Date.now())
-  };
-  Object.entries(filled).forEach(([key, value]) => {
-    const current = url.searchParams.get(key);
-    if (!current || current === 'unknown') url.searchParams.set(key, value);
+    appVersion: '5.14.0-0f5ca672f515a62078d2ec0ad2',
+    clientID,
+    clientModelNumber: '1.0.0',
+    clientTime: new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z'),
+    deviceMake: 'chrome',
+    deviceModel: 'web',
+    deviceType: 'web',
+    deviceVersion: '131.0.0.0',
+    serverSideAds: 'false'
   });
-  return proxied(url.toString());
+
+  const response = await fetch(proxied(`${PLUTO.boot}/v4/start?${query}`), {
+    headers: { Accept: 'application/json' }
+  });
+  if (!response.ok) throw new Error(`pluto boot HTTP ${response.status}`);
+
+  const data = await response.json();
+  const token = data.sessionToken;
+  const stitcher = String((data.servers && data.servers.stitcher) || '').replace(/\/+$/, '');
+  if (!token || !stitcher) throw new Error('pluto boot missing sessionToken/stitcher');
+
+  const refreshSec = Number(data.refreshInSec) || 6 * 60 * 60;
+  plutoSession = {
+    token,
+    stitcher,
+    params: String(data.stitcherParams || ''),
+    // Refresh a few minutes early so a long watch never hits an expired JWT.
+    expiresAt: now + Math.max(60, refreshSec - 300) * 1000
+  };
+  return plutoSession;
+}
+
+// Build the stitcher master URL for a channel: /v2/stitch/... + jwt +
+// masterJWTPassthrough + stitcherParams (device/session identity from boot).
+async function plutoUrl(channel, forceBoot = false) {
+  const session = await plutoBoot(forceBoot);
+  const path = `/v2/stitch/hls/channel/${encodeURIComponent(channel.id)}/master.m3u8`;
+  const query = new URLSearchParams({
+    jwt: session.token,
+    masterJWTPassthrough: 'true',
+    includeExtendedEvents: 'true'
+  });
+  const suffix = session.params ? `&${session.params}` : '';
+  return proxied(`${session.stitcher}${path}?${query.toString()}${suffix}`);
 }
 
 async function loadPluto() {
@@ -503,7 +633,9 @@ async function genreSet(genre) {
 
 function buildSources() {
   if (!el.sources) return;
-  const entries = [['plex', 'Plex']];
+  const entries = [];
+  if (state.loaded.local || state.counts.local) entries.push(['local', 'Local']);
+  entries.push(['plex', 'Plex']);
   if (PLUTO.enabled) entries.push(['pluto', 'Pluto TV']);
 
   el.sources.replaceChildren(
@@ -526,6 +658,31 @@ function buildSources() {
 async function switchSource(name) {
   // Clicking the active tab retries a source that failed to load.
   if (name === state.source && state.loaded[name]) return;
+  if (name === 'local' && !state.loaded.local) {
+    state.source = 'local';
+    state.genre = 'all';
+    state.lang = 'all';
+    state.query = '';
+    el.search.value = '';
+    el.searchClear.hidden = true;
+    state.channels = [];
+    state.byId = new Map();
+    buildSources();
+    buildFilters();
+    el.count.textContent = 'Loading…';
+    el.grid.replaceChildren();
+    showNotice('Loading local channels…', 'info');
+    try {
+      await loadLocal();
+      hideNotice();
+    } catch (error) {
+      showNotice(`Could not load local channels. ${error.message}.`, 'error');
+      state.source = 'plex';
+      buildSources();
+      switchSource('plex');
+    }
+    return;
+  }
   if (name === 'pluto' && !state.loaded.pluto) {
     state.source = 'pluto';
     state.genre = 'all';
@@ -556,7 +713,11 @@ async function switchSource(name) {
   el.search.value = '';
   el.searchClear.hidden = true;
 
-  const channels = name === 'pluto' ? state.plutoChannels : state.plexChannels;
+  const channels = name === 'pluto'
+    ? state.plutoChannels
+    : name === 'local'
+      ? state.localChannels
+      : state.plexChannels;
   state.channels = channels;
   state.byId = new Map(channels.map((channel) => [channel.id, channel]));
   buildSources();
@@ -566,9 +727,12 @@ async function switchSource(name) {
 
 function buildFilters() {
   const pluto = state.source === 'pluto';
+  const local = state.source === 'local';
   const list = pluto
     ? [['all', 'Todos']].concat(state.categories.map((category) => [category, category]))
-    : GENRES;
+    : local
+      ? [['all', 'All']]
+      : GENRES;
 
   el.genreBar.replaceChildren(
     ...list.map(([key, label]) => chip(key, label, key === state.genre, (value) => {
@@ -578,9 +742,9 @@ function buildFilters() {
     }))
   );
 
-  // Pluto BR is Portuguese-only, so the language row has nothing to filter.
-  el.langBar.hidden = pluto;
-  if (pluto) {
+  // Pluto BR is Portuguese-only; Local has a single feed language. Neither needs a language row.
+  el.langBar.hidden = pluto || local;
+  if (pluto || local) {
     el.langBar.replaceChildren();
     return;
   }
@@ -625,7 +789,9 @@ function matches(channel) {
 
 async function render() {
   let allowed = null;
-  if (state.source === 'pluto') {
+  if (state.source === 'local') {
+    allowed = null;
+  } else if (state.source === 'pluto') {
     // The Pluto lineup already carries its own category, so filter locally
     // instead of asking the Plex genre endpoint.
     allowed = state.genre === 'all'
@@ -663,7 +829,9 @@ async function render() {
   el.grid.replaceChildren(fragment);
   // Pluto ships its guide with the lineup, so paint every card now instead of
   // waiting for the intersection observer to fetch one by one.
-  if (state.source === 'pluto') visible.forEach((channel) => paintAiring(channel.id));
+  if (state.source === 'pluto' || state.source === 'local') {
+    visible.forEach((channel) => paintAiring(channel.id));
+  }
   observeCards();
 }
 
@@ -790,6 +958,11 @@ function writeAiringCache() {
 }
 
 async function loadAiring(channelId) {
+  if (state.source === 'local') {
+    paintAiring(channelId);
+    const record = state.airings.get(channelId);
+    return (record && record.now) || null;
+  }
   if (state.source === 'pluto') {
     paintAiring(channelId);
     const record = state.airings.get(channelId);
@@ -919,9 +1092,17 @@ function closeOverlay() {
 }
 
 async function startPlayback(channel) {
-  const master = state.source === 'pluto'
-    ? plutoUrl(channel)
-    : `${PLEX.epg}/library/parts/${encodeURIComponent(channel.id)}.m3u8?${tokenQuery(state.session || (await resolveSession()))}`;
+  // Rebuild the master URL per attempt so a forced boot retry can replace an
+  // expired JWT without tearing the player down.
+  const loadMaster = async (forceBoot = false) => {
+    if (state.source === 'local') return channel.playUrl;
+    if (state.source === 'pluto') return plutoUrl(channel, forceBoot);
+    return `${PLEX.epg}/library/parts/${encodeURIComponent(channel.id)}.m3u8?${tokenQuery(
+      state.session || (await resolveSession())
+    )}`;
+  };
+
+  let master = await loadMaster();
 
   await loadHls();
 
@@ -970,8 +1151,17 @@ async function startPlayback(channel) {
       const delay = Math.min(6000, 600 * 2 ** state.recoveries);
       el.overlayError.hidden = false;
       el.overlayError.textContent = `Stream interrupted — retrying (${state.recoveries}/5)…`;
-      window.setTimeout(() => {
-        if (state.hls) state.hls.loadSource(master);
+      window.setTimeout(async () => {
+        if (!state.hls) return;
+        try {
+          // A 403/404 on the stitcher usually means the JWT expired mid-watch;
+          // force a fresh boot before reloading.
+          if (state.source === 'pluto') master = await loadMaster(true);
+          state.hls.loadSource(master);
+        } catch (error) {
+          el.overlayError.hidden = false;
+          el.overlayError.textContent = 'This channel stopped responding. Press Retry.';
+        }
       }, delay);
       return;
     }
@@ -993,6 +1183,13 @@ async function startPlayback(channel) {
 }
 
 async function tune(channel) {
+  if (state.source === 'local') {
+    el.overlayProgram.textContent = channel.title;
+    el.overlaySub.textContent = 'Local HLS';
+    el.overlayTitle.textContent = channel.title;
+    state.program = null;
+    return;
+  }
   if (state.source === 'pluto') {
     applyPlutoProgram(channel);
     return;
@@ -1057,6 +1254,12 @@ function applyPlutoProgram(channel) {
 }
 
 async function refreshAiring(channel) {
+  if (state.source === 'local') {
+    el.overlayProgram.textContent = channel.title;
+    el.overlaySub.textContent = 'Local HLS';
+    el.overlayNext.textContent = '';
+    return;
+  }
   if (state.source === 'pluto') {
     const record = state.airings.get(channel.id);
     if (record && record.now && record.now.endsAt * 1000 < Date.now()) {
