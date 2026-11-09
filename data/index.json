@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-02T16:00:01+00:00",
+  "generated_at": "2026-11-09T16:25:43+00:00",
   "categories": {
     "movie": {
       "file": "movies.json",
@@ -13,8 +13,8 @@
     },
     "anime": {
       "file": "animes.json",
-      "count": 2684,
-      "bytes": 1105598
+      "count": 2709,
+      "bytes": 1116005
     }
   }
 }
