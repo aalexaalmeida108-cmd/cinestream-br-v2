@@ -58,6 +58,24 @@ to draw it. The image has fixed pixel dimensions on purpose: an SVG with percent
 no intrinsic size and some browsers (notably iOS Safari) refuse to paint it inside an `<img>`. The
 **Copiar código do QR Code** button copies the full BR Code for PIX Copia e Cola.
 
+### Reminder schedule
+
+The strip is not always on screen. `js/pix-schedule.js` opens a **3-day window every 31 days**:
+3 days visible, 28 days hidden, repeat. It runs synchronously in `<head>` and adds `pix-off` to
+`<html>` before the first paint, so a closed window never flashes the banner.
+
+The schedule is pure calendar arithmetic against a fixed anchor, so it is identical for every
+visitor — no cookie, no `localStorage`, no server, and no drift if someone clears their browser.
+To move the calendar, edit one line:
+
+```js
+var ANCHOR = { year: 2026, month: 11, day: 10 }; // first day of a visible window
+```
+
+Manual control for a campaign or a test: `?pix=on` forces the strip on, `?pix=off` forces it off.
+The footer link **Apoiar via PIX** stays available at all times, so a donation is always possible
+even while the strip is in its hidden phase.
+
 ## Refresh the catalog
 
 ```bash

@@ -1039,6 +1039,12 @@ button {
 
 /* ---- Donation strip ---------------------------------------------------- */
 
+/* The PIX strip follows a 3-on / 28-off calendar window. The class is set in
+   <head> before paint, so a closed window never flashes. */
+.pix-off .donate-strip {
+  display: none;
+}
+
 .donate-strip {
   border-bottom: 1px solid var(--border);
   background:
