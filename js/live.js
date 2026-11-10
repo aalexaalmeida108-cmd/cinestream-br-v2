@@ -43,6 +43,11 @@ const PLUTO_PROXY = String(
 const PLUTO = {
   api: 'https://api.pluto.tv',
   boot: 'https://boot.pluto.tv',
+  // Region aware channel list: /v2/channels?country=BR answers with the
+  // Brazilian lineup no matter where the request comes from.
+  channelService: 'https://service-channels.clusters.pluto.tv',
+  // Brazilian lineup kept in the repository, served from our own origin.
+  channelFile: 'data/pluto-channels.json',
   proxy: PLUTO_PROXY,
   enabled: !!PLUTO_PROXY
 };
@@ -417,6 +422,36 @@ function normalizeChannel(raw) {
   };
 }
 
+
+// The Brazilian lineup carries the Portuguese dub as a separate audio track
+// ("Portuguese") next to the original ("Portuguese [Original]"). hls.js
+// starts on whichever the manifest marks as default, which is the original
+// English track, so the dub has to be picked by hand.
+function selectPortugueseAudio(hls) {
+  const tracks = (hls && hls.audioTracks) || [];
+
+  const isPortuguese = (track) => {
+    const name = String(track.name || '').toLowerCase();
+    const lang = String(track.lang || '').toLowerCase();
+    return name.indexOf('portugu') >= 0 || lang === 'pt' || lang.indexOf('pt-') === 0;
+  };
+  const isOriginal = (track) => /original/.test(String(track.name || '').toLowerCase());
+
+  if (tracks.length >= 2) {
+    const dubbed = tracks.findIndex((track) => isPortuguese(track) && !isOriginal(track));
+    const index = dubbed >= 0 ? dubbed : tracks.findIndex(isPortuguese);
+    if (index >= 0 && hls.audioTrack !== index) hls.audioTrack = index;
+  }
+
+  // Every Brazilian channel carries a Portuguese subtitle track; turn it on
+  // so the channels that keep the original audio still read in Portuguese.
+  const subtitles = (hls && hls.subtitleTracks) || [];
+  const portuguese = subtitles.findIndex((track) => isPortuguese(track));
+  if (portuguese >= 0 && hls.subtitleTrack !== portuguese) {
+    hls.subtitleTrack = portuguese;
+  }
+}
+
 /* ------------------------------------------------------------------ pluto */
 
 // Pluto's API, boot and stitcher pin CORS to pluto.tv, so all three go through
@@ -485,13 +520,29 @@ async function plutoUrl(channel, forceBoot = false) {
 }
 
 async function loadPluto() {
-  const start = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const stop = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
-  const target = `${PLUTO.api}/v2/channels?start=${encodeURIComponent(start)}&stop=${encodeURIComponent(stop)}`;
+  // The Brazilian lineup is kept in the repository and served from our own
+  // origin. Pluto answers the channel service with the catalogue of the
+  // caller's country, and the proxy egresses from outside Brazil, so the live
+  // API would only ever bring the English lineup. The file also carries the
+  // channel ids the stitcher needs for the Brazilian asset set, which is
+  // where the Portuguese dub lives.
+  let list = null;
+  try {
+    const response = await fetch(PLUTO.channelFile, { cache: 'force-cache' });
+    if (response.ok) {
+      const payload = await response.json();
+      list = Array.isArray(payload) ? payload : payload.items;
+    }
+  } catch (error) {
+    list = null;
+  }
 
-  const response = await fetch(proxied(target), { headers: { Accept: 'application/json' } });
-  if (!response.ok) throw new Error(`pluto HTTP ${response.status}`);
-  const list = await response.json();
+  if (!Array.isArray(list) || !list.length) {
+    const target = `${PLUTO.channelService}/v2/channels?country=BR&sid=${encodeURIComponent(plutoClientId())}`;
+    const response = await fetch(proxied(target), { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`pluto HTTP ${response.status}`);
+    list = await response.json();
+  }
 
   const channels = (Array.isArray(list) ? list : [])
     .map(normalizePluto)
@@ -537,6 +588,10 @@ function normalizePluto(raw) {
     number: raw.number || 0,
     categories: [raw.category].filter(Boolean),
     playUrl: hls.url,
+    // 'dubbed' means the Brazilian asset carries the Portuguese dub as the
+    // audio itself, 'subtitled' means the original audio with Portuguese
+    // subtitles. Measured per channel by scripts/probe_pluto_audio.py.
+    audio: raw.audio === 'dubbed' || raw.audio === 'subtitled' ? raw.audio : '',
     timelines: Array.isArray(raw.timelines) ? raw.timelines : []
   };
 }
@@ -636,7 +691,7 @@ function buildSources() {
   const entries = [];
   if (state.loaded.local || state.counts.local) entries.push(['local', 'Local']);
   entries.push(['plex', 'Plex']);
-  if (PLUTO.enabled) entries.push(['pluto', 'Pluto TV']);
+  if (PLUTO.enabled) entries.push(['pluto', 'Pluto TV BR']);
 
   el.sources.replaceChildren(
     ...entries.map(([key, label]) => {
@@ -876,6 +931,16 @@ function channelCard(channel) {
     hd.className = 'live-hd';
     hd.textContent = 'HD';
     art.appendChild(hd);
+  }
+
+  if (channel.audio) {
+    const dub = document.createElement('span');
+    dub.className = 'live-dub' + (channel.audio === 'dubbed' ? ' is-dubbed' : '');
+    dub.textContent = channel.audio === 'dubbed' ? 'Dublado' : 'Legenda PT';
+    dub.title = channel.audio === 'dubbed'
+      ? 'Áudio em português'
+      : 'Áudio original com legenda em português';
+    art.appendChild(dub);
   }
 
   const meta = document.createElement('span');
@@ -1132,9 +1197,12 @@ async function startPlayback(channel) {
     fragLoadingRetryDelay: 800
   });
   state.hls = hls;
+  // Debug handle: the audio track choice is worth inspecting from the console.
+  window.__cineHls = hls;
 
   hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
     el.overlayError.hidden = true;
+    selectPortugueseAudio(hls);
     autoplay();
   });
 

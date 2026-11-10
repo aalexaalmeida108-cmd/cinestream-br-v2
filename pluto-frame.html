@@ -1,0 +1,9 @@
+<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#111}iframe{width:1200px;height:800px;border:0;display:block}</style>
+<iframe id="f" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>
+<script>
+const q=new URLSearchParams(location.search);
+const f=document.getElementById('f');
+f.src=q.get('u');
+const sb=q.get('sb');
+if(sb&&sb!=='none')f.setAttribute('sandbox',sb);
+</script>
