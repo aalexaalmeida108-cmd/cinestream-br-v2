@@ -226,6 +226,21 @@ assets/                    Favicon and poster placeholder
   not exist as a separate audio track on VidSrc, WatchPlay or VidLink for the titles measured, so
   the site offers the subtitle track and the audio preference instead of promising a dub that is
   not there.
+- The Live TV page carries the Brazilian Pluto TV lineup: 187 channels with the Portuguese
+  names, kept in `data/pluto-channels.json` and refreshed by `scripts/fetch_pluto_br.py`. Pluto
+  answers the channel service with the catalogue of the caller's country and the proxy egresses
+  from outside Brazil, so the lineup that matters cannot be fetched at runtime and lives in the
+  repository instead. The script refuses to write a catalogue that does not look Brazilian.
+- `scripts/probe_pluto_audio.py` asks the stitcher for the master playlist of every channel and
+  marks what it finds: 133 channels ship the Brazilian asset set, where the Portuguese dub is the
+  audio itself, and 52 keep the original audio with a Portuguese subtitle track. The cards show
+  **Dublado** on the first group and **Legenda PT** on the second. The subtitle track is selected
+  on playback, and the player offers a link to the official Pluto player, where the subtitle menu
+  and the full audio list are available.
+- The Pluto API, boot service and stitcher pin CORS to pluto.tv, so every hop goes through the
+  path style proxy in `worker/pluto-proxy.js`. The session the boot service hands out is bound to
+  the proxy's own address, which Pluto reads as outside Brazil; that is why the channels with a
+  separate audio rendition only expose the original there.
 - The map cannot be crawled in one go: the embed host rate-limits per IP and returns 403 after a
   few thousand requests. `.github/workflows/probe-availability.yml` therefore probes a batch of 120
   series every six hours from a fresh runner IP, merges into the file and stores a `cursor`, so the

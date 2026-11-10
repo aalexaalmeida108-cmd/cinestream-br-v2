@@ -1,0 +1,56 @@
+name: Refresh Pluto lineup
+
+# The Brazilian channel list lives in data/pluto-channels.json. Pluto answers
+# the channel service with the catalogue of the caller's country, so the
+# refresh script only writes when the answer really is the Brazilian one and
+# refuses to replace a good file with a foreign catalogue.
+#
+# The audio probe always runs: it asks the stitcher for every master playlist
+# and marks the channels that carry the Portuguese dub.
+
+on:
+  schedule:
+    - cron: "41 5 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-pluto
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refresh the Brazilian lineup
+        continue-on-error: true
+        run: |
+          python scripts/fetch_pluto_br.py || echo "keeping the current lineup (runner is not in Brazil)"
+
+      - name: Mark the channels with a Portuguese dub
+        continue-on-error: true
+        run: |
+          python scripts/probe_pluto_audio.py --workers 4
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/pluto-channels.json
+          if git diff --cached --quiet; then
+            echo "No change in the Pluto lineup."
+          else
+            git commit -m "chore: refresh the Brazilian Pluto lineup"
+            git push
+          fi

@@ -156,6 +156,7 @@ async function init() {
   el.overlayLogo = document.getElementById('liveOverlayLogo');
   el.overlayProgram = document.getElementById('liveOverlayProgram');
   el.overlaySub = document.getElementById('liveOverlaySub');
+  el.overlayPluto = document.getElementById('liveOverlayPluto');
   el.overlayProgress = document.getElementById('liveOverlayProgress');
   el.overlayQuality = document.getElementById('liveOverlayQuality');
   el.overlayClose = document.getElementById('liveOverlayClose');
@@ -447,8 +448,13 @@ function selectPortugueseAudio(hls) {
   // so the channels that keep the original audio still read in Portuguese.
   const subtitles = (hls && hls.subtitleTracks) || [];
   const portuguese = subtitles.findIndex((track) => isPortuguese(track));
-  if (portuguese >= 0 && hls.subtitleTrack !== portuguese) {
+  if (portuguese >= 0) {
+    // The first pick lands before hls.js has grouped the tracks, so it is
+    // queued. Switching twice forces the renderer to bind the Portuguese
+    // track and to create the cue layer over the video.
+    if (hls.subtitleTrack !== portuguese) hls.subtitleTrack = -1;
     hls.subtitleTrack = portuguese;
+    hls.subtitleDisplay = true;
   }
 }
 
@@ -1119,6 +1125,16 @@ async function openChannel(channel) {
   el.overlayProgram.textContent = 'Tuning in…';
   el.overlaySub.textContent = '';
   el.overlayNext.textContent = '';
+  // The official Pluto player carries the Portuguese subtitle menu and the
+  // full audio list, which is the fallback for the channels that keep the
+  // original audio.
+  if (state.source === 'pluto' && channel.slug) {
+    el.overlayPluto.hidden = false;
+    el.overlayPluto.href = `https://pluto.tv/br/live-tv/${encodeURIComponent(channel.slug)}/`;
+  } else {
+    el.overlayPluto.hidden = true;
+    el.overlayPluto.removeAttribute('href');
+  }
   el.overlayProgress.style.width = '0%';
   el.overlayQuality.textContent = '';
   el.overlayError.hidden = true;
@@ -1205,6 +1221,10 @@ async function startPlayback(channel) {
     selectPortugueseAudio(hls);
     autoplay();
   });
+
+  // The subtitle list lands after the manifest is parsed, so the Portuguese
+  // track is picked as soon as hls.js publishes it.
+  hls.on(window.Hls.Events.SUBTITLE_TRACKS_UPDATED, () => selectPortugueseAudio(hls));
 
   hls.on(window.Hls.Events.LEVEL_SWITCHED, (_, data) => {
     const level = hls.levels[data.level];

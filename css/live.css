@@ -635,3 +635,19 @@ body.live-playing {
   background: #34d399;
   border-color: #34d399;
 }
+
+/* Link to the official Pluto player, where the Portuguese subtitle menu and
+   the full audio list live */
+.live-pluto-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #93c5fd;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(147, 197, 253, 0.35);
+}
+
+.live-pluto-link:hover {
+  color: #dbeafe;
+  border-bottom-color: #dbeafe;
+}
