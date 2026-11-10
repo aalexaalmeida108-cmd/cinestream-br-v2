@@ -5,12 +5,45 @@
 
 const params = new URLSearchParams(window.location.search);
 const WATCHPLAY_ORIGIN = 'https://v2.watchplay.shop';
+const SOURCE_PREFS_KEY = 'cinestream:source';
 const EPISODE_INDEX_URL = 'data/episodes.json';
+
+// Ordered by overall coverage. Every source is an independent catalog, so a
+// title missing from one usually plays on another; the buttons below the
+// heading switch between them without leaving the episode.
+const SOURCES = [
+  {
+    id: 'vidsrc',
+    label: 'VidSrc',
+    url: (cfg) => cfg.type === 'movie'
+      ? 'https://vidsrc.buzz/embed/movie/' + encodeURIComponent(cfg.tmdb || cfg.imdb)
+      : 'https://vidsrc.buzz/embed/tv/' + encodeURIComponent(cfg.tmdb)
+        + '/' + cfg.season + '/' + cfg.episode
+  },
+  {
+    id: 'watchplay',
+    label: 'WatchPlay',
+    url: (cfg) => cfg.type === 'movie'
+      ? WATCHPLAY_ORIGIN + '/movie/' + encodeURIComponent(cfg.tmdb || cfg.imdb)
+      : WATCHPLAY_ORIGIN + '/tvshow/' + encodeURIComponent(cfg.tmdb)
+        + '/' + cfg.season + '/' + cfg.episode
+  },
+  {
+    id: 'vidlink',
+    label: 'VidLink',
+    url: (cfg) => cfg.type === 'movie'
+      ? 'https://vidlink.pro/movie/' + encodeURIComponent(cfg.tmdb || cfg.imdb)
+      : 'https://vidlink.pro/tv/' + encodeURIComponent(cfg.tmdb)
+        + '/' + cfg.season + '/' + cfg.episode
+  }
+];
+
 const el = {};
 let config = null;
 let loadTimer = 0;
 let lastRecentKey = '';
 let episodeIndex = null;
+let sourceIndex = 0;
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -33,10 +66,14 @@ function init() {
   el.synopsis = document.getElementById('synopsis');
   el.synopsisText = document.getElementById('synopsisText');
   el.backLink = document.getElementById('backLink');
-  el.alternateLink = document.getElementById('alternateLink');
+  el.sourceTabs = document.getElementById('sourceTabs');
+  el.nextSource = document.getElementById('nextSource');
   el.removeRecent = document.getElementById('removeRecent');
 
   config = readConfig();
+  sourceIndex = resolveInitialSource();
+  buildSourceTabs();
+  if (el.nextSource) el.nextSource.addEventListener('click', cycleSource);
   bindEvents();
   loadEpisodeIndex();
 }
@@ -102,13 +139,7 @@ function applyConfig() {
   }
 
   el.externalLink.href = url;
-  const alternate = buildAlternateUrl();
-  if (alternate) {
-    el.alternateLink.href = alternate;
-    el.alternateLink.hidden = false;
-  } else {
-    el.alternateLink.hidden = true;
-  }
+  updateSourceTabs();
   updateMeta();
   updateSynopsis();
 
@@ -284,7 +315,7 @@ function bindEvents() {
   });
 
   el.playerFrame.addEventListener('load', () => {
-    if (!el.playerFrame.src.startsWith(WATCHPLAY_ORIGIN + '/')) return;
+    if (!/^https?:\/\//.test(el.playerFrame.src)) return;
     window.clearTimeout(loadTimer);
     el.playerLoading.hidden = true;
     el.playerFrame.hidden = false;
@@ -355,8 +386,7 @@ function applyEpisode() {
   }
 
   el.externalLink.href = url;
-  const alternate = buildAlternateUrl();
-  if (alternate) el.alternateLink.href = alternate;
+  updateSourceTabs();
   updateUrl();
   updateMeta();
   loadPlayer(url);
@@ -373,30 +403,85 @@ function loadPlayer(url) {
   el.playerFrame.src = url;
 
   loadTimer = window.setTimeout(() => {
-    el.loadingText.textContent = 'Still loading... This source can be slow. Try “Open in new tab” if it does not start.';
+    el.loadingText.textContent = 'Still loading... If it does not start, use “Try another source” above or open it in a new tab.';
   }, 12000);
 }
 
 function buildPlayerUrl() {
+  const source = SOURCES[sourceIndex];
+  if (!source) return '';
   if (config.type === 'movie') {
     const id = config.tmdb || config.imdb;
-    return id ? WATCHPLAY_ORIGIN + '/movie/' + encodeURIComponent(id) : '';
+    return id ? source.url(config) : '';
   }
-
-  if (!config.tmdb) return '';
-  return WATCHPLAY_ORIGIN + '/tvshow/' + encodeURIComponent(config.tmdb)
-    + '/' + config.season + '/' + config.episode;
+  return config.tmdb ? source.url(config) : '';
 }
 
-function buildAlternateUrl() {
-  if (config.type === 'movie') {
-    const id = config.imdb || config.tmdb;
-    return id ? 'https://myembed.biz/filme/' + encodeURIComponent(id) : '';
-  }
+function resolveInitialSource() {
+  const requested = params.get('src');
+  const saved = readSourcePref();
+  const wanted = requested || saved;
+  const index = SOURCES.findIndex((source) => source.id === wanted);
+  return index >= 0 ? index : 0;
+}
 
-  if (!config.tmdb) return '';
-  return 'https://myembed.biz/serie/' + encodeURIComponent(config.tmdb)
-    + '/' + config.season + '/' + config.episode;
+function readSourcePref() {
+  try {
+    return window.localStorage.getItem(SOURCE_PREFS_KEY) || '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function saveSourcePref() {
+  try {
+    window.localStorage.setItem(SOURCE_PREFS_KEY, SOURCES[sourceIndex].id);
+  } catch (error) {
+    // Private mode; the choice simply does not persist.
+  }
+}
+
+function buildSourceTabs() {
+  if (!el.sourceTabs) return;
+  el.sourceTabs.replaceChildren();
+  SOURCES.forEach((source, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'source-tab';
+    button.dataset.source = source.id;
+    button.textContent = source.label;
+    button.addEventListener('click', () => selectSource(index));
+    el.sourceTabs.appendChild(button);
+  });
+  updateSourceTabs();
+}
+
+function updateSourceTabs() {
+  if (!el.sourceTabs) return;
+  Array.from(el.sourceTabs.children).forEach((button, index) => {
+    const active = index === sourceIndex;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
+function selectSource(index) {
+  if (index === sourceIndex || !SOURCES[index]) return;
+  sourceIndex = index;
+  saveSourcePref();
+  updateSourceTabs();
+  const url = buildPlayerUrl();
+  if (!url) {
+    showError('This title is missing the identifier this source needs.');
+    return;
+  }
+  el.externalLink.href = url;
+  updateUrl();
+  loadPlayer(url);
+}
+
+function cycleSource() {
+  selectSource((sourceIndex + 1) % SOURCES.length);
 }
 
 function updateMeta() {
@@ -444,6 +529,7 @@ function updateUrl() {
   const url = new URL(window.location.href);
   url.searchParams.set('se', String(config.season));
   url.searchParams.set('ep', String(config.episode));
+  url.searchParams.set('src', SOURCES[sourceIndex].id);
   history.replaceState(null, '', url);
 }
 

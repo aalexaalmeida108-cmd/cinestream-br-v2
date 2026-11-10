@@ -2,9 +2,8 @@
 
 Live site: <https://aalexaalmeida108-cmd.github.io/cinestream-br-v2/>
 
-A static catalog browser for [EmbedMovies](https://embedmovies.org/) with direct playback through
-[WatchPlay](https://watchplay.shop/) ([MyEmbed](https://myembed.biz/) remains available as an
-alternate player). Movies, series and anime are searchable, sortable and filterable by genre, and
+A static catalog browser for [EmbedMovies](https://embedmovies.org/) with playback through
+several embeddable sources (VidSrc, WatchPlay and VidLink). Movies, series and anime are searchable, sortable and filterable by genre, and
 every title opens in a dedicated watch page with a season/episode selector for series. The catalog
 also keeps a local "Continue watching" row with the last opened titles and episodes.
 
@@ -173,17 +172,20 @@ assets/                    Favicon and poster placeholder
 - Continue watching is stored only in `localStorage` under `cinestream:recent:v1` and capped at 12
   entries. It records the title and last opened season/episode, never uploads history, and can be
   removed per title or cleared from the catalog row.
-- WatchPlay runs in a cross-origin iframe and does not publish playback events to the parent page.
-  The site therefore cannot detect the end of an episode and advance by itself; the watch page
-  provides a **Next episode** button instead, which follows the real episode count of each season
-  and rolls into the next season on the last episode. True automatic advance would require a
-  same-origin HLS player and a stream URL source, not the current embedded player.
+- Players run in a cross-origin iframe and publish no playback events to the parent page, so the
+  site cannot detect the end of an episode. The watch page provides a **Next episode** button
+  instead, which follows the real episode count of each season and rolls into the next season on
+  the last episode.
+- Each source has its own library. The watch page keeps the choice in `cinestream:source` and
+  exposes a **Try another source** button, because a title missing from one source usually plays
+  on another. Availability was measured directly: WatchPlay resolves roughly half of the catalog
+  on its own, VidSrc covers a different half, and the union is higher than either one alone.
 - The episode counter comes from `data/episodes.json`, which is measured against the player. A
   title that the player does not host has no measured counts, so the watch page falls back to the
   catalog season count.
-- The original MyEmbed URL is exposed as an alternate player on every watch page.
-- The site does not host, proxy or store any video. Playback is provided by WatchPlay, and metadata
-  comes from EmbedMovies. Genre metadata comes from Bingebang and IMDb.
+- MyEmbed (`myembed.biz`) no longer serves a player, so it was removed from the watch page.
+- The site does not host, proxy or store any video. Playback is provided by the third-party sources
+  listed above, and metadata comes from EmbedMovies. Genre metadata comes from Bingebang and IMDb.
 - Adult titles are filtered out of the generated catalog.
 - If the catalog endpoint changes its response shape, update `normalize()` in
   `scripts/fetch_catalog.py` and regenerate the data.
