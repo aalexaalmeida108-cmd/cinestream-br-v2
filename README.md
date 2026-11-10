@@ -204,6 +204,19 @@ assets/                    Favicon and poster placeholder
 - The episode counter comes from `data/episodes.json`, which is measured against the player. A
   title that the player does not host has no measured counts, so the watch page falls back to the
   catalog season count.
+- Some shows are hosted only from a later season. `Law & Order: Special Victims Unit` has no server
+  for season 1 at all, so opening on season 1 looked like a broken page. `data/availability.json`
+  maps a TMDB id to the seasons that actually answer, and the watch page opens on the closest
+  season that has a source, with a notice saying which one it skipped. Titles absent from the map
+  are treated as unknown and keep the old season 1 default.
+- The map cannot be crawled in one go: the embed host rate-limits per IP and returns 403 after a
+  few thousand requests. `.github/workflows/probe-availability.yml` therefore probes a batch of 120
+  series every six hours from a fresh runner IP, merges into the file and stores a `cursor`, so the
+  catalog is covered over a few days without ever hammering the host. Run it by hand with:
+
+  ```bash
+  python3 scripts/probe_availability.py --offset 0 --limit 120 --merge --workers 4 --rate 1.5
+  ```
 - MyEmbed (`myembed.biz`) no longer serves a player, so it was removed from the watch page.
 - The site does not host, proxy or store any video. Playback is provided by the third-party sources
   listed above, and metadata comes from EmbedMovies. Genre metadata comes from Bingebang and IMDb.

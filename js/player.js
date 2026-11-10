@@ -7,6 +7,10 @@ const params = new URLSearchParams(window.location.search);
 const WATCHPLAY_ORIGIN = 'https://v2.watchplay.shop';
 const SOURCE_PREFS_KEY = 'cinestream:source';
 const EPISODE_INDEX_URL = 'data/episodes.json';
+// Seasons known to answer with at least one server on the default source.
+// Built incrementally; a title missing from the map is simply "unknown" and
+// keeps the plain season 1 default.
+const AVAILABILITY_URL = 'data/availability.json';
 
 // Ordered by overall coverage. Every source is an independent catalog, so a
 // title missing from one usually plays on another; the buttons below the
@@ -43,6 +47,8 @@ let config = null;
 let loadTimer = 0;
 let lastRecentKey = '';
 let episodeIndex = null;
+let availability = null;
+let seasonNotice = '';
 let sourceIndex = 0;
 
 document.addEventListener('DOMContentLoaded', init);
@@ -68,6 +74,7 @@ function init() {
   el.backLink = document.getElementById('backLink');
   el.sourceTabs = document.getElementById('sourceTabs');
   el.nextSource = document.getElementById('nextSource');
+  el.seasonNotice = document.getElementById('seasonNotice');
   el.removeRecent = document.getElementById('removeRecent');
 
   config = readConfig();
@@ -86,17 +93,24 @@ function loadEpisodeIndex() {
     return;
   }
 
-  fetch(EPISODE_INDEX_URL, { cache: 'force-cache' })
+  const episodes = fetch(EPISODE_INDEX_URL, { cache: 'force-cache' })
     .then((response) => (response.ok ? response.json() : null))
-    .catch(() => null)
-    .then((payload) => {
-      const items = payload && payload.items;
-      if (items) {
-        const counts = items[String(config.tmdb)];
-        if (counts && counts.length) episodeIndex = counts;
-      }
-      applyConfig();
-    });
+    .catch(() => null);
+  const known = fetch(AVAILABILITY_URL, { cache: 'force-cache' })
+    .then((response) => (response.ok ? response.json() : null))
+    .catch(() => null);
+
+  Promise.all([episodes, known]).then(([episodePayload, availabilityPayload]) => {
+    const counts = episodePayload && episodePayload.items
+      && episodePayload.items[String(config.tmdb)];
+    if (counts && counts.length) episodeIndex = counts;
+
+    const seasons = availabilityPayload && availabilityPayload.items
+      && availabilityPayload.items[String(config.tmdb)];
+    if (Array.isArray(seasons) && seasons.length) availability = seasons;
+
+    applyConfig();
+  });
 }
 
 function readConfig() {
@@ -146,6 +160,7 @@ function applyConfig() {
   if (config.type !== 'movie' && knownSeasons().length) {
     setupEpisodeControls();
   }
+  updateSeasonNotice();
   if (el.nextEpisode) el.nextEpisode.hidden = config.type === 'movie';
   updateNextEpisodeButton();
 
@@ -156,7 +171,24 @@ function applyConfig() {
 
 // Keeps the requested season and episode inside what actually exists.
 function clampToKnownEpisodes() {
-  if (config.type === 'movie' || !episodeIndex) return;
+  if (config.type === 'movie') return;
+
+  // A season with no server behind it opens on a black frame. If the map knows
+  // which seasons answer, land on the closest one that does instead of failing
+  // silently on season 1.
+  if (availability && !availability.includes(config.season)) {
+    const next = availability.find((season) => season >= config.season) || availability[0];
+    if (next && next !== config.season) {
+      seasonNotice = 'Temporada ' + config.season + ' não tem fonte neste catálogo; '
+        + 'abrimos a temporada ' + next + '.';
+      config.season = next;
+    }
+  }
+
+  if (!episodeIndex) {
+    updateSeasonNotice();
+    return;
+  }
 
   const seasons = knownSeasons();
   if (!seasons.length) return;
@@ -167,6 +199,17 @@ function clampToKnownEpisodes() {
 
   const count = seasonEpisodeCount(config.season);
   if (count && config.episode > count) config.episode = count;
+}
+
+function updateSeasonNotice() {
+  if (!el.seasonNotice) return;
+  if (!seasonNotice) {
+    el.seasonNotice.hidden = true;
+    el.seasonNotice.textContent = '';
+    return;
+  }
+  el.seasonNotice.textContent = seasonNotice;
+  el.seasonNotice.hidden = false;
 }
 
 function rememberCurrent() {
@@ -323,6 +366,7 @@ function bindEvents() {
 }
 
 function onSeasonChange() {
+  seasonNotice = '';
   const seasons = knownSeasons();
   const lastSeason = seasons.length ? seasons[seasons.length - 1] : Math.max(1, config.seasons);
   const season = clampInt(el.seasonSelect.value, 1, lastSeason, 1);

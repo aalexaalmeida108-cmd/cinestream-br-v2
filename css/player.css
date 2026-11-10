@@ -424,3 +424,14 @@
     margin-left: 0;
   }
 }
+
+/* Notice shown when the requested season has no server behind it */
+.season-notice {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  font-size: 0.82rem;
+  color: #fde68a;
+  background: rgba(253, 224, 71, 0.08);
+  border: 1px solid rgba(253, 224, 71, 0.25);
+  border-radius: 8px;
+}
