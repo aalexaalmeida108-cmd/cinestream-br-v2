@@ -105,9 +105,10 @@ function loadEpisodeIndex() {
       && episodePayload.items[String(config.tmdb)];
     if (counts && counts.length) episodeIndex = counts;
 
-    const seasons = availabilityPayload && availabilityPayload.items
+    const entry = availabilityPayload && availabilityPayload.items
       && availabilityPayload.items[String(config.tmdb)];
-    if (Array.isArray(seasons) && seasons.length) availability = seasons;
+    if (entry && !Array.isArray(entry)) availability = entry;
+    else if (Array.isArray(entry) && entry.length) availability = { vidsrc: entry };
 
     applyConfig();
   });
@@ -169,19 +170,52 @@ function applyConfig() {
   rememberCurrent();
 }
 
+function seasonsOnSource(sourceId) {
+  if (!availability) return null;
+  const list = availability[sourceId];
+  return Array.isArray(list) && list.length ? list : null;
+}
+
+// Picks the source most likely to carry `season`. A source known to list the
+// season wins; then VidLink, which carries a much wider TV library than the
+// default; then anything not yet mapped. Returns -1 when every source is known
+// to lack it.
+function pickSourceForSeason(season) {
+  for (let index = 0; index < SOURCES.length; index += 1) {
+    const list = seasonsOnSource(SOURCES[index].id);
+    if (list && list.includes(season)) return index;
+  }
+  const vidlink = SOURCES.findIndex((source) => source.id === 'vidlink');
+  if (vidlink >= 0 && !seasonsOnSource('vidlink')) return vidlink;
+  for (let index = 0; index < SOURCES.length; index += 1) {
+    if (!seasonsOnSource(SOURCES[index].id)) return index;
+  }
+  return -1;
+}
+
 // Keeps the requested season and episode inside what actually exists.
 function clampToKnownEpisodes() {
   if (config.type === 'movie') return;
 
-  // A season with no server behind it opens on a black frame. If the map knows
-  // which seasons answer, land on the closest one that does instead of failing
-  // silently on season 1.
-  if (availability && !availability.includes(config.season)) {
-    const next = availability.find((season) => season >= config.season) || availability[0];
-    if (next && next !== config.season) {
-      seasonNotice = 'Temporada ' + config.season + ' não tem fonte neste catálogo; '
-        + 'abrimos a temporada ' + next + '.';
-      config.season = next;
+  // A season with no server behind it opens on a black frame. Move to a source
+  // that carries this season before considering a season change, because a
+  // missing season on one source usually exists on another.
+  const current = SOURCES[sourceIndex].id;
+  const here = seasonsOnSource(current);
+  if (here && !here.includes(config.season)) {
+    const better = pickSourceForSeason(config.season);
+    if (better >= 0 && better !== sourceIndex) {
+      seasonNotice = 'A temporada ' + config.season + ' não está no ' + SOURCES[sourceIndex].label
+        + '; abrimos no ' + SOURCES[better].label + '.';
+      sourceIndex = better;
+      updateSourceTabs();
+    } else {
+      const next = here.find((season) => season >= config.season) || here[0];
+      if (next && next !== config.season) {
+        seasonNotice = 'A temporada ' + config.season + ' não tem fonte neste catálogo; '
+          + 'abrimos a temporada ' + next + '.';
+        config.season = next;
+      }
     }
   }
 

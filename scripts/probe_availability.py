@@ -164,19 +164,34 @@ def main() -> int:
     cursor = total_catalog
     if args.merge and path.exists():
         previous = json.loads(path.read_text(encoding="utf-8"))
-        merged = {str(k): v for k, v in (previous.get("items") or {}).items()}
-        merged.update(items)
+        merged = {}
+        for key, value in (previous.get("items") or {}).items():
+            if isinstance(value, dict):
+                merged[str(key)] = {str(name): list(seasons) for name, seasons in value.items()}
+            elif isinstance(value, list):
+                merged[str(key)] = {SOURCE: list(value)}
+        for key, seasons in items.items():
+            merged.setdefault(key, {})[SOURCE] = seasons
         cursor = (start + total + 1) % total_catalog
     else:
         merged = items
 
+    # Items are per source: {"<tmdb>": {"vidsrc": [1, 2], "vidlink": [...]}}.
+    # Legacy flat arrays are upgraded on write.
+    structured: dict[str, dict[str, list[int]]] = {}
+    for key, value in merged.items():
+        if isinstance(value, list):
+            structured[key] = {SOURCE: value}
+        elif isinstance(value, dict):
+            structured[key] = {str(name): list(seasons) for name, seasons in value.items() if seasons}
+
     payload = {
         "generated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
-        "source": SOURCE,
+        "sources": ["vidsrc", "vidlink", "watchplay"],
         "probed": total,
-        "count": len(merged),
+        "count": len(structured),
         "cursor": cursor,
-        "items": dict(sorted(merged.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0)),
+        "items": dict(sorted(structured.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0)),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
