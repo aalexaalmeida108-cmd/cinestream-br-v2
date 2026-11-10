@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineStream</title>
+  <link rel="icon" href="icon.png" type="image/png">
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #05070a;
+      color: #e6e9ef;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+    }
+    #frame {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+    #splash {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      gap: 18px;
+      background: radial-gradient(circle at 50% 40%, #131a2a, #05070a 70%);
+      transition: opacity 0.4s ease;
+    }
+    #splash img {
+      width: 96px;
+      height: 96px;
+      border-radius: 22px;
+    }
+    #splash p {
+      margin: 0;
+      font-size: 0.95rem;
+      color: #9aa4b8;
+    }
+  </style>
+</head>
+<body>
+  <iframe
+    id="frame"
+    title="CineStream"
+    src="https://aalexaalmeida108-cmd.github.io/cinestream-br-v2/index.html"
+    allow="autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write"
+    allowfullscreen
+    referrerpolicy="no-referrer"
+  ></iframe>
+
+  <div id="splash">
+    <img src="icon.png" alt="">
+    <p>Carregando o CineStream…</p>
+  </div>
+
+  <script>
+    // The splash only lives until the site answers; the frame keeps the
+    // remote control focus, so the TV remote drives the page.
+    var frame = document.getElementById('frame');
+    var splash = document.getElementById('splash');
+
+    var done = false;
+    function hide() {
+      if (done) return;
+      done = true;
+      splash.style.opacity = '0';
+      window.setTimeout(function () { splash.remove(); }, 400);
+    }
+
+    frame.addEventListener('load', hide);
+    window.setTimeout(hide, 8000);
+  </script>
+</body>
+</html>

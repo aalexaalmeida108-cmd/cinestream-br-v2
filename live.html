@@ -8,6 +8,11 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Live TV — CineStream</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/app-icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="CineStream">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/live.css">
 </head>
@@ -42,6 +47,14 @@
         <button type="button" class="search-clear" id="liveSearchClear" aria-label="Clear search" hidden>&times;</button>
       </form>
 
+      <button class="header-install" id="installApp" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12"></path>
+          <path d="m7 10 5 5 5-5"></path>
+          <path d="M5 21h14"></path>
+        </svg>
+        <span>Instalar app</span>
+      </button>
       <a class="back-link live-back" href="./" aria-label="Back to catalog">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M19 12H5"></path>
@@ -147,5 +160,6 @@
   <!-- Pluto TV needs the manifest proxy in worker/pluto-proxy.js. Paste its URL here. -->
   <script>window.CINESTREAM_PLUTO_PROXY = 'https://cinestream-pluto-proxy.claudia-ingles.workers.dev';</script>
   <script src="js/live.js" defer></script>
+  <script src="js/install.js" defer></script>
 </body>
 </html>

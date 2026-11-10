@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest xmlns="http://tizen.org/ns/packages" api_version="5.0" package="org.cinestream.tv" version="1.0.0">
+  <profile name="tv"/>
+  <tizen:application xmlns:tizen="http://tizen.org/ns/packages" required_version="5.0" type="webapp">
+    <tizen:icon>icon.png</tizen:icon>
+    <tizen:name>CineStream</tizen:name>
+    <tizen:label>CineStream</tizen:label>
+    <tizen:description>Filmes, séries, anime e TV ao vivo em português.</tizen:description>
+    <tizen:category>tv</tizen:category>
+    <tizen:icon background-image="icon.png"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <tizen:privilege name="http://tizen.org/privilege/network.public"/>
+    <tizen:allow-navigation>https://aalexaalmeida108-cmd.github.io/*</tizen:allow-navigation>
+    <tizen:setting screen-orientation="landscape" background-support="enable" encryption="disable" hwkey-event="enable" install-location="auto" launchmode="default" multi-instance="disable" theme="dark"/>
+    <tizen:access origin="*" subdomains="true"/>
+    <tizen:feature name="http://tizen.org/feature/screen.size.normal"/>
+    <tizen:feature name="http://tizen.org/feature/network.internet"/>
+    <tizen:feature name="http://tizen.org/feature/network.public"/>
+  </tizen:application>
+</manifest>

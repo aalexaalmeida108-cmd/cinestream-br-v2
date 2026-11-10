@@ -255,3 +255,22 @@ assets/                    Favicon and poster placeholder
 - Adult titles are filtered out of the generated catalog.
 - If the catalog endpoint changes its response shape, update `normalize()` in
   `scripts/fetch_catalog.py` and regenerate the data.
+
+## App na TV
+
+O site é instalável como PWA: `manifest.webmanifest` declara fullscreen em paisagem,
+ícones próprios e o botão **Instalar app** no cabeçalho. No navegador da TV ele
+aparece quando o navegador aceita a instalação; nos que não aceitam, o botão abre
+o passo a passo manual.
+
+Para uma TV Samsung Tizen há também o pacote nativo em `tizen-app/`, empacotado
+por `scripts/build_tizen_tpk.py`:
+
+```bash
+python3 scripts/build_tizen_tpk.py            # dist/cinestream.wgt e dist/cinestream.tpk
+```
+
+O `.tpk` sai sem assinatura; a assinatura é feita pelo `signing_cli.jar` do Tizen
+Studio (ou pelo próprio IDE). Na TV: modo desenvolvedor em *Suporte → Smart Hub →
+TV Plus → Gerenciamento → Configurações de desenvolvedor* (PIN 0000) e *Conexão de
+TV* ligado, depois `Run` pelo Tizen Studio ou instalação do `.tpk` por USB.

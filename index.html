@@ -11,6 +11,11 @@
   <meta property="og:type" content="website">
   <title>CineStream — Movies, Series &amp; Anime</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/app-icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="CineStream">
   <link rel="stylesheet" href="css/style.css">
   <!-- Synchronous on purpose: decides the PIX window before the first paint. -->
   <script src="js/pix-schedule.js"></script>
@@ -47,6 +52,14 @@
         <kbd class="search-kbd" aria-hidden="true">/</kbd>
       </form>
 
+      <button class="header-install" id="installApp" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12"></path>
+          <path d="m7 10 5 5 5-5"></path>
+          <path d="M5 21h14"></path>
+        </svg>
+        <span>Instalar app</span>
+      </button>
       <a class="header-live" href="live.html" aria-label="Watch free live TV channels">
         <span class="header-live-dot"></span>
         <span>Live TV</span>
@@ -178,5 +191,6 @@
       </p>
     </div>
   </div>
+  <script src="js/install.js" defer></script>
 </body>
 </html>
