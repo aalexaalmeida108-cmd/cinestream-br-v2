@@ -74,6 +74,9 @@ function plutoClientId() {
 }
 
 const STORE_KEY = 'cinestream:plex:v1';
+// A personal account token, when the viewer links their own Plex account.
+// It stays in this browser: the token is never part of the site.
+const ACCOUNT_TOKEN_KEY = 'cinestream:plex:account';
 const GENRE_KEY = 'cinestream:genres:v1';
 const AIRING_KEY = 'cinestream:airings:v1';
 const AIRING_TTL = 15 * 60 * 1000;
@@ -172,6 +175,27 @@ async function init() {
 }
 
 /* ------------------------------------------------------------------ token */
+
+function readAccountToken() {
+  const fromUrl = new URLSearchParams(location.search).get('plex');
+  if (fromUrl) {
+    writeAccountToken(fromUrl);
+    return fromUrl;
+  }
+  try {
+    return localStorage.getItem(ACCOUNT_TOKEN_KEY) || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function writeAccountToken(token) {
+  try {
+    localStorage.setItem(ACCOUNT_TOKEN_KEY, token);
+  } catch (_) {
+    /* storage disabled */
+  }
+}
 
 function readSession() {
   try {
@@ -331,6 +355,13 @@ async function resolveSession(force) {
       state.session = saved;
       return saved;
     }
+  }
+  // A linked account wins over the anonymous session: it carries the
+  // viewer's own channels and their saved preferences.
+  const account = readAccountToken();
+  if (account) {
+    state.session = { token: account, clientId: PLEX.fallbackClientId, createdAt: Date.now() };
+    return state.session;
   }
   let session;
   try {

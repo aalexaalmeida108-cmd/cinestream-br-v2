@@ -1,0 +1,75 @@
+/* CineStream — player de filmes na TV. Complementa css/tv.css. */
+
+.tv-player-page .tv-header {
+  justify-content: flex-start;
+}
+
+.tv-backlink {
+  margin-left: 18px;
+  padding: 8px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #cdd4e0;
+  text-decoration: none;
+  background: #151a22;
+  border: 1px solid #232b38;
+  border-radius: 999px;
+}
+
+.tv-backlink:hover {
+  color: #ffffff;
+  border-color: #4f8cff;
+}
+
+.tv-card-poster {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tv-embed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000000;
+}
+
+.tv-source-row {
+  display: inline-block;
+  margin-right: 12px;
+  vertical-align: middle;
+}
+
+.tv-source-btn {
+  margin-right: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #cdd4e0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tv-source-btn.is-active {
+  color: #08111f;
+  background: #4f8cff;
+  border-color: #4f8cff;
+  font-weight: 700;
+}
+
+.tv-mini-select {
+  margin-right: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #e9ecf2;
+  background: rgba(10, 14, 20, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+}

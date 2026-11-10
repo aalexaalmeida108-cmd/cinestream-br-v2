@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineStream — TV</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/tv.css">
+  <link rel="stylesheet" href="css/tvplayer.css">
+</head>
+<body class="tv-page tv-player-page">
+
+  <header class="tv-header">
+    <a class="tv-brand" href="tv.html">
+      <span class="tv-brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+          <path d="M10 9.5v5l4-2.5-4-2.5Z" fill="currentColor" stroke="none"></path>
+        </svg>
+      </span>
+      <span class="tv-brand-name">CINE<em>STREAM</em></span>
+    </a>
+
+    <form class="tv-search" id="tvPlayerForm">
+      <input type="search" id="tvPlayerSearch" class="tv-search-input" placeholder="Buscar filme..." aria-label="Buscar filme" spellcheck="false">
+    </form>
+
+    <a class="tv-backlink" href="tv.html">Voltar</a>
+  </header>
+
+  <main class="tv-main">
+    <div class="tv-chips" id="tvPlayerChips"></div>
+    <section class="tv-grid" id="tvPlayerGrid" aria-label="Filmes"></section>
+  </main>
+
+  <div class="tv-overlay" id="tvOverlay" aria-hidden="true">
+    <div class="tv-stage">
+      <iframe id="tvFrame" class="tv-embed" title="player" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+      <div class="tv-stage-top">
+        <button type="button" class="tv-close" id="tvClose" aria-label="Fechar player">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12"></path>
+          </svg>
+        </button>
+        <span class="tv-badge"><span class="tv-dot"></span>PLAYER</span>
+        <span class="tv-stage-name" id="tvStageName"></span>
+      </div>
+      <div class="tv-stage-foot">
+        <span class="tv-stage-title" id="tvStageTitle"></span>
+        <span class="tv-stage-note" id="tvStageNote"></span>
+      </div>
+      <div class="tv-error" id="tvError" hidden></div>
+    </div>
+  </div>
+
+  <script src="js/tvplayer.js"></script>
+</body>
+</html>
