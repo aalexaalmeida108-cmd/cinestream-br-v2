@@ -52,8 +52,11 @@ when nothing changed. Cron example:
 ## Donations
 
 The site shows a PIX strip below the header and a QR modal (`js/donate.js`) with the key
-`1088safary@gmail.com` and a suggested R$ 20. The BR Code is a static EMV payload generated once
-(`assets/pix-qr.svg`), so the page needs no third-party QR service and no network call to render it.
+`1088safary@gmail.com` and a suggested R$ 20. The BR Code is a static EMV payload rendered once to
+`assets/pix-qr.png` with `qrencode`, so the page needs no third-party QR service and no network call
+to draw it. The image has fixed pixel dimensions on purpose: an SVG with percentage width/height has
+no intrinsic size and some browsers (notably iOS Safari) refuse to paint it inside an `<img>`. The
+**Copiar código do QR Code** button copies the full BR Code for PIX Copia e Cola.
 
 ## Refresh the catalog
 
