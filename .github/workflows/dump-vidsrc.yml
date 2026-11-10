@@ -44,8 +44,16 @@ jobs:
               body = r.read(500_000).decode("utf-8", "replace")
 
           print("bytes", len(body))
-          for match in re.finditer(r"api\.php\?a=", body):
-              start = max(0, match.start() - 700)
-              print("-----")
-              print(body[start:match.end() + 900].replace("\\n", "\n"))
+          def show(label, pattern, before, after, limit=3):
+              for index, match in enumerate(re.finditer(pattern, body)):
+                  if index >= limit:
+                      break
+                  print(f"----- {label} #{index}")
+                  print(body[max(0, match.start() - before):match.end() + after].replace("\\n", "\n"))
+
+          show("audioPref", r"audioPref\s*=", 200, 700)
+          show("qs build", r"qs\s*=", 400, 700)
+          show("search params", r"searchParams|\.get\(", 250, 400, limit=6)
+          show("sources call", r"api\.php\?a=sources", 900, 700)
+          show("audioTracks def", r"function audioTracks", 100, 700)
           PY
