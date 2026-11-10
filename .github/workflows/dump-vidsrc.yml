@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       ids:
-        description: "Comma separated tmdb ids (tv ids get season 1)"
-        default: "1399,2734,1726,862,157336,1396,66732,346,680"
+        description: "Comma separated tmdb ids"
+        default: "1399,2734,1726"
         required: false
 
 permissions:
@@ -47,21 +47,23 @@ jobs:
               tmdb = tmdb.strip()
               if not tmdb:
                   continue
-              for url in (f"https://vidsrc.buzz/embed/tv/{tmdb}/1/1",
-                          f"https://vidsrc.buzz/embed/movie/{tmdb}"):
+              for label, url in (("tv", f"https://vidsrc.buzz/embed/tv/{tmdb}/1/1"),
+                                 ("movie", f"https://vidsrc.buzz/embed/movie/{tmdb}")):
                   try:
                       status, body = get(url)
                   except Exception as exc:
-                      print(f"== {url}: ERROR {exc}")
+                      print(f"== {tmdb} {label}: ERROR {exc}")
                       continue
                   refs = re.findall(r'\{"ref":.*?"rm":(?:true|null)\}', body)
-                  print(f"== {url} status={status} bytes={len(body)} servers={len(refs)}")
-                  for entry in refs:
-                      print("   ", entry[:260])
-                  if url.endswith("/1/1") or "/tv/" not in url:
-                      break
-              # one dump of the player plumbing is enough
-              if tmdb == IDS[0]:
-                  urls = sorted(set(re.findall(r'https?://[a-z0-9.\-]+/(?:api|stream|player)[^"\'\s]{0,60}', body)))
-                  print("   endpoints:", urls[:12])
+                  named = [r for r in refs if re.search(r'"(?:lang|ai|ad|sk)":"[^"]', r)]
+                  print(f"== {tmdb} {label}: status={status} servers={len(refs)} with-language={len(named)}")
+                  for entry in named:
+                      print("    LANG", entry[:300])
+                  if tmdb == IDS[0] and label == "tv":
+                      # how the embed page turns a server into a stream
+                      for pat in (r'"/api/[^"]{0,80}', r'fetch\([^)]{0,90}', r'XMLHttpRequest',
+                                  r'URLSearchParams[^;]{0,80}', r'server[^,;]{0,60}'):
+                          found = re.findall(pat, body)[:6]
+                          if found:
+                              print("    PAT", pat, "->", found)
           PY
