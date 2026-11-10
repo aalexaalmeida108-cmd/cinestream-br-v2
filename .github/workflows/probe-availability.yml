@@ -60,13 +60,28 @@ jobs:
         run: |
           python - <<'PY'
           import json, sys
+
           data = json.load(open("data/availability.json", encoding="utf-8"))
           items = data.get("items") or {}
-          bad = [k for k, v in items.items() if not isinstance(v, list) or not v]
+          bad = []
+
+          # Items are {"<tmdb>": {"<source>": [season, ...]}}. A title may sit
+          # under one source only; an empty list is dropped on write, so any
+          # empty list here means the writer regressed.
+          for key, entry in items.items():
+              if not isinstance(entry, dict) or not entry:
+                  bad.append(key)
+                  continue
+              for source, seasons in entry.items():
+                  if not isinstance(seasons, list) or not seasons:
+                      bad.append(f"{key}/{source}")
+                  elif seasons != sorted(set(seasons)):
+                      bad.append(f"{key}/{source}:unsorted")
+
           if bad:
-              print("empty season lists:", bad[:5])
+              print("bad entries:", bad[:8])
               sys.exit(1)
-          print(f"{len(items)} titles mapped")
+          print(f"{len(items)} titles mapped across {len(data.get('sources') or [])} sources")
           PY
 
       - name: Commit
