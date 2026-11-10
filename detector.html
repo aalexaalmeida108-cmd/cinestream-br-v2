@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<body style="background:#111;color:#0f0;font:14px monospace">
+<div id="out">running…</div>
+<script>
+// Instrumented copy of VidLink's sandbox detection (from its own bundle),
+// used to find which sandbox flags the player refuses to run under.
+(function () {
+  var reasons = [];
+  var detected = false;
+
+  function mark(reason) { detected = true; reasons.push(reason); }
+
+  if (window.self !== window.top) {
+    try {
+      var frame = window.frameElement;
+      reasons.push(frame === null ? 'frameElement=null' : 'frameElement=element');
+      if (frame === null || frame === void 0 ? void 0 : frame.hasAttribute('sandbox')) {
+        mark('frameElement-has-sandbox');
+        return done();
+      }
+    } catch (err) { reasons.push('frameElement-threw'); }
+
+    try {
+      document.domain = document.domain;
+      reasons.push('domain-ok');
+    } catch (err) {
+      try {
+        if (String(err).toLowerCase().indexOf('sandbox') >= 0) {
+          mark('domain-threw-sandbox');
+          return done();
+        }
+        reasons.push('domain-threw-other');
+      } catch (inner) { reasons.push('domain-threw-unknown'); }
+    }
+
+    try {
+      if (!window.navigator.plugins.namedItem('Chrome PDF Viewer')) {
+        reasons.push('no-pdf-plugin');
+        return done();
+      }
+      reasons.push('pdf-plugin-present');
+      var obj = document.createElement('object');
+      obj.data = 'data:application/pdf;base64,aG1t';
+      obj.style.cssText = 'position:absolute;top:-500px;left:-500px;visibility:hidden;';
+      obj.onerror = function () { mark('pdf-object-error'); done(); };
+      obj.onload = function () { obj.parentNode.removeChild(obj); reasons.push('pdf-object-ok'); done(); };
+      document.body.appendChild(obj);
+      setTimeout(function () { reasons.push('pdf-timeout'); done(); }, 4000);
+      return;
+    } catch (err) { reasons.push('plugin-threw'); }
+  }
+
+  done();
+
+  function done() {
+    var text = 'RESULT ' + (detected ? 'BLOCKED' : 'PASSED') + ' :: ' + reasons.join(',');
+    document.getElementById('out').textContent = text;
+    parent.postMessage({ probe: 'sandbox-detector', text: text }, '*');
+  }
+})();
+</script>
