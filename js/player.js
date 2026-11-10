@@ -6,6 +6,7 @@
 const params = new URLSearchParams(window.location.search);
 const WATCHPLAY_ORIGIN = 'https://v2.watchplay.shop';
 const SOURCE_PREFS_KEY = 'cinestream:source';
+const AUDIO_PREFS_KEY = 'cinestream:audio';
 const EPISODE_INDEX_URL = 'data/episodes.json';
 // Seasons known to answer with at least one server on the default source.
 // Built incrementally; a title missing from the map is simply "unknown" and
@@ -50,6 +51,7 @@ let episodeIndex = null;
 let availability = null;
 let seasonNotice = '';
 let sourceIndex = 0;
+let audioMode = 'original';
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -75,6 +77,8 @@ function init() {
   el.sourceTabs = document.getElementById('sourceTabs');
   el.nextSource = document.getElementById('nextSource');
   el.seasonNotice = document.getElementById('seasonNotice');
+  el.audioSelect = document.getElementById('audioSelect');
+  el.audioHint = document.getElementById('audioHint');
   el.removeRecent = document.getElementById('removeRecent');
 
   config = readConfig();
@@ -162,12 +166,21 @@ function applyConfig() {
     setupEpisodeControls();
   }
   updateSeasonNotice();
+  setupAudioControl();
   if (el.nextEpisode) el.nextEpisode.hidden = config.type === 'movie';
   updateNextEpisodeButton();
 
   applyBackLink();
   loadPlayer(url);
   rememberCurrent();
+}
+
+function setupAudioControl() {
+  if (!el.audioSelect) return;
+  audioMode = readAudioPref() === 'pt' ? 'pt' : 'original';
+  el.audioSelect.value = audioMode;
+  el.audioSelect.addEventListener('change', onAudioChange);
+  updateAudioHint();
 }
 
 function seasonsOnSource(sourceId) {
@@ -209,6 +222,7 @@ function clampToKnownEpisodes() {
         + '; abrimos no ' + SOURCES[better].label + '.';
       sourceIndex = better;
       updateSourceTabs();
+      updateAudioHint();
     } else {
       const next = here.find((season) => season >= config.season) || here[0];
       if (next && next !== config.season) {
@@ -488,11 +502,78 @@ function loadPlayer(url) {
 function buildPlayerUrl() {
   const source = SOURCES[sourceIndex];
   if (!source) return '';
+  let url = '';
   if (config.type === 'movie') {
     const id = config.tmdb || config.imdb;
-    return id ? source.url(config) : '';
+    url = id ? source.url(config) : '';
+  } else {
+    url = config.tmdb ? source.url(config) : '';
   }
-  return config.tmdb ? source.url(config) : '';
+  return applyAudioPreference(url, source.id);
+}
+
+// Each player takes the language preference in its own way:
+//   VidSrc  reads ?ad= and matches it against the audio tracks of the
+//           server, so a Portuguese track wins when the upstream carries one.
+//   VidLink reads ?multiLang= and opens the multi language menu, which is
+//           where the Portuguese subtitle track lives.
+//   WatchPlay serves the original audio only.
+function applyAudioPreference(url, sourceId) {
+  if (!url || audioMode !== 'pt') return url;
+  const separator = url.includes('?') ? '&' : '?';
+  if (sourceId === 'vidsrc') return url + separator + 'ad=pt';
+  if (sourceId === 'vidlink') return url + separator + 'multiLang=true';
+  return url;
+}
+
+function readAudioPref() {
+  try {
+    return window.localStorage.getItem(AUDIO_PREFS_KEY) || 'original';
+  } catch (err) {
+    return 'original';
+  }
+}
+
+function saveAudioPref(value) {
+  try {
+    window.localStorage.setItem(AUDIO_PREFS_KEY, value);
+  } catch (err) {
+    /* private mode: the choice just does not survive the reload */
+  }
+}
+
+// Tells the viewer where the Portuguese track actually is, per source.
+function updateAudioHint() {
+  if (!el.audioHint) return;
+  const source = SOURCES[sourceIndex];
+  const sourceId = source ? source.id : '';
+  let text = '';
+  if (audioMode === 'pt') {
+    if (sourceId === 'vidsrc') {
+      text = 'O VidSrc procura a trilha em português no servidor escolhido. '
+        + 'Quando o servidor não tem dublagem, o áudio fica no original.';
+    } else if (sourceId === 'vidlink') {
+      text = 'No player do VidLink, abra o menu de engrenagem e escolha a faixa '
+        + '“Português” para a legenda brasileira.';
+    } else {
+      text = 'O WatchPlay entrega apenas o áudio original.';
+    }
+  } else {
+    text = 'Escolha “Português (BR)” para procurar dublagem; a legenda '
+      + 'brasileira do VidLink fica no menu de engrenagem do player.';
+  }
+  el.audioHint.textContent = text;
+}
+
+function onAudioChange() {
+  audioMode = el.audioSelect.value === 'pt' ? 'pt' : 'original';
+  saveAudioPref(audioMode);
+  updateAudioHint();
+  const url = buildPlayerUrl();
+  if (url) {
+    el.externalLink.href = url;
+    loadPlayer(url);
+  }
 }
 
 function resolveInitialSource() {
@@ -548,6 +629,7 @@ function selectSource(index) {
   sourceIndex = index;
   saveSourcePref();
   updateSourceTabs();
+  updateAudioHint();
   const url = buildPlayerUrl();
   if (!url) {
     showError('This title is missing the identifier this source needs.');

@@ -1,9 +1,0 @@
-<!doctype html><meta charset="utf-8"><body style="background:#000;color:#0f0;font:13px monospace">
-<iframe id="f" style="width:700px;height:200px;border:1px solid #333"></iframe>
-<script>
-const q=new URLSearchParams(location.search).get('s');
-const f=document.getElementById('f');
-f.src='https://cdn.jsdelivr.net/gh/aalexaalmeida108-cmd/cinestream-br-v2@main/detector.html';
-if(q&&q!=='none')f.setAttribute('sandbox',q);
-addEventListener('message',e=>{ if(e.data&&e.data.probe==='sandbox-detector') console.log('PROBE '+e.data.text); });
-</script>

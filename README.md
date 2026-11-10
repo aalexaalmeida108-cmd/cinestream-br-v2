@@ -209,11 +209,23 @@ assets/                    Favicon and poster placeholder
   each source answers, and the watch page moves the episode to a source that carries the requested
   season before it considers changing the season. The notice under the episode controls says which
   source was chosen and why. Titles absent from the map are treated as unknown.
-- The player iframe carries **no `sandbox` attribute**. VidLink refuses to play inside a sandboxed
-  frame and renders "Please Disable Sandbox" instead. Removing it lets every source render, at the
-  cost that a third-party frame can open popups or navigate the top window. `referrerpolicy` and
-  the `allow` list stay in place. If a source ever abuses that, the fix is a per-source iframe
-  rather than re-adding a sandbox that breaks playback.
+- The player iframe is sandboxed with `allow-scripts allow-same-origin allow-forms
+  allow-presentation`. The embed pages check for a sandbox and only refuse when the frame cannot
+  keep its own origin, so `allow-same-origin` is the flag that matters. With the sandbox on, the
+  third-party frames cannot open popups nor navigate the top window, which is what used to send
+  the viewer to an ad page. Verified: the VidLink and WatchPlay players both render and stream
+  inside the sandbox.
+- Language is a per-source switch, applied to the player URL. `js/player.js` keeps the choice in
+  `cinestream:audio` and rewrites the URL: VidSrc reads `?ad=` and matches it against the audio
+  tracks of the server it picked, VidLink reads `?multiLang=` and opens the multi language menu
+  where the Portuguese subtitle track sits. The VidSrc embed reports its audio tracks back to the
+  embed API (`api.php?a=atracks`), so a Portuguese track is picked automatically when the
+  upstream server carries one.
+- What the catalog actually carries: VidLink ships one audio track per title (the original) plus
+  subtitles in about a dozen languages, including `Português`. The Brazilian Portuguese dub does
+  not exist as a separate audio track on VidSrc, WatchPlay or VidLink for the titles measured, so
+  the site offers the subtitle track and the audio preference instead of promising a dub that is
+  not there.
 - The map cannot be crawled in one go: the embed host rate-limits per IP and returns 403 after a
   few thousand requests. `.github/workflows/probe-availability.yml` therefore probes a batch of 120
   series every six hours from a fresh runner IP, merges into the file and stores a `cursor`, so the

@@ -65,6 +65,17 @@
       </button>
     </div>
 
+    <div class="audio-bar">
+      <label class="field" for="audioSelect">
+        <span>Áudio</span>
+        <select id="audioSelect">
+          <option value="original">Original</option>
+          <option value="pt">Português (BR)</option>
+        </select>
+      </label>
+      <p class="audio-hint" id="audioHint"></p>
+    </div>
+
     <div class="episode-bar" id="episodeBar" hidden>
       <div class="episode-fields">
         <label class="field">
@@ -98,6 +109,7 @@
         id="playerFrame"
         class="player-frame"
         title="Video player"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
         allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
         allowfullscreen
         referrerpolicy="strict-origin-when-cross-origin"

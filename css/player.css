@@ -435,3 +435,49 @@
   border: 1px solid rgba(253, 224, 71, 0.25);
   border-radius: 8px;
 }
+
+/* Audio / subtitle language row */
+.audio-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: var(--panel, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+}
+
+.audio-bar .field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.audio-bar .field > span {
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #94a3b8);
+}
+
+.audio-bar select {
+  min-width: 160px;
+}
+
+.audio-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted, #94a3b8);
+  flex: 1 1 260px;
+}
+
+@media (max-width: 640px) {
+  .audio-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

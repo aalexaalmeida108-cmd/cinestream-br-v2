@@ -44,6 +44,19 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
 )
+# The embed host answers with 403 to anything that does not look like a real
+# iframe navigation. Sending the same header set the browser sends got the
+# page to load from runner IPs; without them the probe saw false negatives.
+HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Referer": REFERER,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "Sec-Fetch-Dest": "iframe",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "cross-site",
+    "Upgrade-Insecure-Requests": "1",
+}
 
 
 # The embed host punishes bursts, so every request passes a shared gate that
@@ -64,7 +77,7 @@ def _wait_for_slot() -> None:
 
 
 def fetch(url: str, timeout: int = 25) -> tuple[int, str]:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Referer": REFERER})
+    request = urllib.request.Request(url, headers=HEADERS)
     for attempt in range(4):
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
