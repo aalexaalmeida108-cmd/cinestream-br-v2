@@ -1,10 +1,15 @@
-name: Dump VidSrc embed
+name: Dump VidSrc servers
 
-# Temporary probe: fetches the raw embed page from a fresh runner IP and
-# prints the server table, so the schema can be read without guessing.
+# Temporary probe: lists the servers behind an embed, with the language
+# fields intact, so dubbed servers can be told apart from plain ones.
 
 on:
   workflow_dispatch:
+    inputs:
+      ids:
+        description: "Comma separated tmdb ids (tv ids get season 1)"
+        default: "1399,2734,1726,862,157336,1396,66732,346,680"
+        required: false
 
 permissions:
   contents: read
@@ -12,45 +17,51 @@ permissions:
 jobs:
   dump:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Dump
         run: |
           python - <<'PY'
-          import json, re, urllib.request
+          import re, urllib.request
 
           UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36")
-
           HEADERS = {
               "User-Agent": UA,
               "Referer": "https://cinestream-br-v2.github.io/",
-              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
               "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
               "Sec-Fetch-Dest": "iframe",
               "Sec-Fetch-Mode": "navigate",
               "Sec-Fetch-Site": "cross-site",
               "Upgrade-Insecure-Requests": "1",
           }
+          IDS = "${{ github.event.inputs.ids || '1399,2734,1726' }}".split(",")
 
           def get(url):
               req = urllib.request.Request(url, headers=HEADERS)
               with urllib.request.urlopen(req, timeout=25) as r:
-                  return r.status, r.read(400_000).decode("utf-8", "replace")
+                  return r.status, r.read(500_000).decode("utf-8", "replace")
 
-          for kind, tmdb, season in (("tv", 2734, 1), ("tv", 1399, 1), ("movie", 1726, 0)):
-              url = (f"https://vidsrc.buzz/embed/tv/{tmdb}/{season}/1" if kind == "tv"
-                     else f"https://vidsrc.buzz/embed/movie/{tmdb}")
-              try:
-                  status, body = get(url)
-              except Exception as exc:
-                  print(f"== {kind}/{tmdb}: ERROR {exc}")
+          for tmdb in IDS:
+              tmdb = tmdb.strip()
+              if not tmdb:
                   continue
-              print(f"== {kind}/{tmdb}: status={status} bytes={len(body)} refs={body.count(chr(34) + 'ref' + chr(34))}")
-              # every ref entry carries a server id and a label
-              for match in re.finditer(r'\{[^{}]*"ref"[^{}]*\}', body):
-                  print("   ", match.group(0)[:300])
-              for word in ("dub", "Dub", "portugu", "Portug", "legend", "Legend", "audio", "lang"):
-                  if word in body:
-                      print(f"    contains {word!r}")
+              for url in (f"https://vidsrc.buzz/embed/tv/{tmdb}/1/1",
+                          f"https://vidsrc.buzz/embed/movie/{tmdb}"):
+                  try:
+                      status, body = get(url)
+                  except Exception as exc:
+                      print(f"== {url}: ERROR {exc}")
+                      continue
+                  refs = re.findall(r'\{"ref":.*?"rm":(?:true|null)\}', body)
+                  print(f"== {url} status={status} bytes={len(body)} servers={len(refs)}")
+                  for entry in refs:
+                      print("   ", entry[:260])
+                  if url.endswith("/1/1") or "/tv/" not in url:
+                      break
+              # one dump of the player plumbing is enough
+              if tmdb == IDS[0]:
+                  urls = sorted(set(re.findall(r'https?://[a-z0-9.\-]+/(?:api|stream|player)[^"\'\s]{0,60}', body)))
+                  print("   endpoints:", urls[:12])
           PY
