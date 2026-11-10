@@ -1,14 +1,14 @@
-name: Dump VidSrc servers
+name: Dump VidSrc API usage
 
-# Temporary probe: lists the servers behind an embed, with the language
-# fields intact, so dubbed servers can be told apart from plain ones.
+# Temporary probe: prints the embed page code around its api.php calls so
+# the request shape can be reproduced.
 
 on:
   workflow_dispatch:
     inputs:
-      ids:
-        description: "Comma separated tmdb ids"
-        default: "1399,2734,1726"
+      id:
+        description: "tmdb id"
+        default: "1399"
         required: false
 
 permissions:
@@ -17,7 +17,7 @@ permissions:
 jobs:
   dump:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Dump
         run: |
@@ -36,34 +36,16 @@ jobs:
               "Sec-Fetch-Site": "cross-site",
               "Upgrade-Insecure-Requests": "1",
           }
-          IDS = "${{ github.event.inputs.ids || '1399,2734,1726' }}".split(",")
+          TMDB = "${{ github.event.inputs.id || '1399' }}"
 
-          def get(url):
-              req = urllib.request.Request(url, headers=HEADERS)
-              with urllib.request.urlopen(req, timeout=25) as r:
-                  return r.status, r.read(500_000).decode("utf-8", "replace")
+          req = urllib.request.Request(
+              f"https://vidsrc.buzz/embed/tv/{TMDB}/1/1", headers=HEADERS)
+          with urllib.request.urlopen(req, timeout=25) as r:
+              body = r.read(500_000).decode("utf-8", "replace")
 
-          for tmdb in IDS:
-              tmdb = tmdb.strip()
-              if not tmdb:
-                  continue
-              for label, url in (("tv", f"https://vidsrc.buzz/embed/tv/{tmdb}/1/1"),
-                                 ("movie", f"https://vidsrc.buzz/embed/movie/{tmdb}")):
-                  try:
-                      status, body = get(url)
-                  except Exception as exc:
-                      print(f"== {tmdb} {label}: ERROR {exc}")
-                      continue
-                  refs = re.findall(r'\{"ref":.*?"rm":(?:true|null)\}', body)
-                  named = [r for r in refs if re.search(r'"(?:lang|ai|ad|sk)":"[^"]', r)]
-                  print(f"== {tmdb} {label}: status={status} servers={len(refs)} with-language={len(named)}")
-                  for entry in named:
-                      print("    LANG", entry[:300])
-                  if tmdb == IDS[0] and label == "tv":
-                      # how the embed page turns a server into a stream
-                      for pat in (r'"/api/[^"]{0,80}', r'fetch\([^)]{0,90}', r'XMLHttpRequest',
-                                  r'URLSearchParams[^;]{0,80}', r'server[^,;]{0,60}'):
-                          found = re.findall(pat, body)[:6]
-                          if found:
-                              print("    PAT", pat, "->", found)
+          print("bytes", len(body))
+          for match in re.finditer(r"api\.php\?a=", body):
+              start = max(0, match.start() - 700)
+              print("-----")
+              print(body[start:match.end() + 900].replace("\\n", "\n"))
           PY
