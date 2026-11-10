@@ -1241,7 +1241,7 @@ body.has-modal {
 .pix-qr-wrap {
   width: 208px;
   height: 208px;
-  margin: 0 auto 16px;
+  margin: 4px auto 12px;
   padding: 8px;
   background: #fff;
   border-radius: 14px;
@@ -1298,16 +1298,30 @@ body.has-modal {
 }
 
 .pix-brcode {
+  display: block;
   width: 100%;
-  margin-top: 10px;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border-strong);
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  font-size: 0.84rem;
+  font-weight: 750;
+  color: #04140d;
+  background: linear-gradient(145deg, #4ade80, #22c55e);
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
 }
 
 .pix-brcode:hover {
-  border-color: rgba(74, 222, 128, 0.55);
-  color: #86efac;
+  filter: brightness(1.06);
+}
+
+.pix-brcode:active {
+  transform: translateY(1px);
+}
+
+.pix-brcode.is-copied {
+  background: #166534;
+  color: #dcfce7;
 }
 
 .pix-copy:hover {

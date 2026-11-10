@@ -87,9 +87,20 @@
   }
 
   if (copyBr) {
+    const brLabel = copyBr.textContent;
     copyBr.addEventListener('click', async () => {
       const ok = await copy(PIX_BRCODE);
-      flash(ok ? 'C\u00f3digo PIX copiado \u2014 cole no seu banco.' : 'N\u00e3o foi poss\u00edvel copiar o c\u00f3digo.');
+      flash(ok
+        ? 'C\u00f3digo do QR Code copiado \u2014 cole no seu banco em PIX Copia e Cola.'
+        : 'N\u00e3o foi poss\u00edvel copiar o c\u00f3digo.');
+      if (!ok) return;
+      copyBr.textContent = 'Copiado!';
+      copyBr.classList.add('is-copied');
+      window.clearTimeout(copyBr.timer);
+      copyBr.timer = window.setTimeout(() => {
+        copyBr.textContent = brLabel;
+        copyBr.classList.remove('is-copied');
+      }, 2200);
     });
   }
 })();
