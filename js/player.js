@@ -79,6 +79,7 @@ function init() {
   el.seasonNotice = document.getElementById('seasonNotice');
   el.audioSelect = document.getElementById('audioSelect');
   el.audioHint = document.getElementById('audioHint');
+  el.sourceNote = document.getElementById('sourceNote');
   el.removeRecent = document.getElementById('removeRecent');
 
   config = readConfig();
@@ -167,6 +168,7 @@ function applyConfig() {
   }
   updateSeasonNotice();
   setupAudioControl();
+  updateSourceNote();
   if (el.nextEpisode) el.nextEpisode.hidden = config.type === 'movie';
   updateNextEpisodeButton();
 
@@ -223,6 +225,7 @@ function clampToKnownEpisodes() {
       sourceIndex = better;
       updateSourceTabs();
       updateAudioHint();
+      updateSourceNote();
     } else {
       const next = here.find((season) => season >= config.season) || here[0];
       if (next && next !== config.season) {
@@ -543,6 +546,22 @@ function saveAudioPref(value) {
 }
 
 // Tells the viewer where the Portuguese track actually is, per source.
+// VidLink runs a popunder script that opens an ad tab when the viewer plays,
+// pauses or seeks. The frame cannot be sandboxed, because the player refuses
+// to run without its own origin. The note tells the viewer what to expect.
+function updateSourceNote() {
+  if (!el.sourceNote) return;
+  const source = SOURCES[sourceIndex];
+  if (source && source.id === 'vidlink') {
+    el.sourceNote.textContent = 'O player do VidLink pode abrir um anúncio em outra aba '
+      + 'depois que você começa a assistir. Feche essa aba e volte aqui: o filme continua.';
+    el.sourceNote.hidden = false;
+    return;
+  }
+  el.sourceNote.hidden = true;
+  el.sourceNote.textContent = '';
+}
+
 function updateAudioHint() {
   if (!el.audioHint) return;
   const source = SOURCES[sourceIndex];
@@ -630,6 +649,7 @@ function selectSource(index) {
   saveSourcePref();
   updateSourceTabs();
   updateAudioHint();
+  updateSourceNote();
   const url = buildPlayerUrl();
   if (!url) {
     showError('This title is missing the identifier this source needs.');
