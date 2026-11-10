@@ -66,20 +66,40 @@ def machine_identifier() -> str:
     status, payload = request(f"{SERVER}/identity", headers={"Accept": "application/json"})
     if status != 200:
         raise SystemExit(f"identity falhou: HTTP {status}")
-    return json.loads(payload)["machineIdentifier"]
+    try:
+        return json.loads(payload)["machineIdentifier"]
+    except Exception:
+        import re
+
+        match = re.search(r'machineIdentifier[=\":\s]+"?([0-9a-fA-F-]{20,})', payload)
+        if not match:
+            raise SystemExit("machineIdentifier não encontrado")
+        return match.group(1)
 
 
 def claim(token: str) -> None:
-    identifier = machine_identifier()
+    """Claim the server the way the current Plex Web app does it.
+
+    The old PUT /media/servers/<id>/claim is gone in Plex 1.43. The app asks
+    the server for a one time claim token and then hands it to plex.tv.
+    """
     headers = {
         "User-Agent": USER_AGENT,
         "X-Plex-Client-Identifier": CLIENT_ID,
         "X-Plex-Product": "Plex Web",
         "X-Plex-Token": token,
-        "Content-Type": "application/json",
     }
-    url = f"{SERVER}/media/servers/{identifier}/claim"
-    status, payload = request(url, "PUT", headers, "{}")
+    status, payload = request(f"{SERVER}/api/claim/token", "GET", headers)
+    if status != 200:
+        raise SystemExit(f"claim token falhou: HTTP {status} {payload[:200]}")
+    import re
+
+    match = re.search(r"<token>([^<]+)</token>", payload) or re.search(r'"token":"([^"]+)"', payload)
+    if not match:
+        raise SystemExit("claim token nao veio na resposta")
+    claim_token = match.group(1)
+
+    status, payload = request(f"{SERVER}/myplex/claim?token={claim_token}", "POST", headers)
     print(f"claim: HTTP {status} {payload[:160]}")
     if status >= 400:
         raise SystemExit("o servidor recusou o claim")
