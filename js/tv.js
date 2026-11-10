@@ -10,6 +10,9 @@
   'use strict';
 
   var PROXY = 'https://cinestream-pluto-proxy.claudia-ingles.workers.dev';
+  // Servidor HLS local: faz boot direto no Pluto (IP brasileiro, áudio dublado)
+  // e reescreve as playlists. Não passa pelo Cloudflare, então não toma 429.
+  var LOCAL_HLS = 'http://' + (window.location.hostname || '192.168.1.115') + ':8098';
   var CHANNEL_FILE = 'data/pluto-channels.json';
   var BOOT_QUERY = {
     appName: 'web',
@@ -282,12 +285,8 @@
     el.error.hidden = true;
     el.stageNote.className = 'tv-stage-note';
 
-    bootSession(function (session) {
-      var url = masterUrl(session, channel._id);
-      startPlayback(url);
-    }, function (error) {
-      showError(error);
-    });
+    var url = LOCAL_HLS + '/live/' + encodeURIComponent(channel._id) + '/master.m3u8';
+    startPlayback(url);
   }
 
   function startPlayback(url) {
