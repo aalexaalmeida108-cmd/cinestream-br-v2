@@ -29,6 +29,7 @@ function rememberDismissed() {
 // The steps differ a little between the Samsung TV browser and the generic
 // Chromium one, so both are listed.
 const RECIPE = [
+  ['TV antiga (Philco, LG, 2014-2017)', 'Abra o endereço /tv.html no navegador da TV e fixe a página como inicial. Essa versão roda em navegadores de 2015.'],
   ['Samsung TV', 'Menu → Aplicativos → Adicionar → Aplicativo Web. Cole o endereço do CineStream e confirme.'],
   ['Navegador da TV (Chromium)', 'Abra o site, toque no menu do navegador e escolha “Instalar aplicativo” ou “Adicionar à tela de início”.'],
   ['Celular e tablet', 'Chrome: menu → “Instalar aplicativo”. Safari (iPhone): Compartilhar → “Adicionar à Tela de Início”.']

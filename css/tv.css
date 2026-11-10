@@ -1,0 +1,330 @@
+/* CineStream — edição TV.
+   Sem variáveis de CSS, sem grid, sem flex gap: só o que o Chrome 47
+   (2015) entende. */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #08090c;
+  color: #e9ecf2;
+  font-family: Arial, Helvetica, sans-serif;
+  overflow: hidden;
+}
+
+.tv-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 24px;
+  background: #0e1117;
+  border-bottom: 1px solid #1c222c;
+}
+
+.tv-brand {
+  display: flex;
+  align-items: center;
+  margin-right: 26px;
+}
+
+.tv-brand-mark {
+  display: block;
+  width: 34px;
+  height: 34px;
+  margin-right: 10px;
+  border-radius: 10px;
+  background: #4f8cff;
+  color: #ffffff;
+}
+
+.tv-brand-mark svg {
+  width: 22px;
+  height: 22px;
+  margin: 6px;
+}
+
+.tv-brand-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.tv-brand-name em {
+  font-style: normal;
+  color: #4f8cff;
+}
+
+.tv-search {
+  flex: 1 1 auto;
+}
+
+.tv-search-input {
+  width: 320px;
+  max-width: 100%;
+  padding: 9px 14px;
+  font-size: 0.95rem;
+  color: #e9ecf2;
+  background: #151a22;
+  border: 1px solid #232b38;
+  border-radius: 999px;
+  outline: none;
+}
+
+.tv-search-input:focus {
+  border-color: #4f8cff;
+}
+
+.tv-status {
+  margin-left: 18px;
+  font-size: 0.85rem;
+  color: #8b95a7;
+}
+
+.tv-main {
+  height: calc(100% - 63px);
+  overflow-y: auto;
+  padding: 16px 24px 40px;
+}
+
+.tv-chips {
+  margin-bottom: 18px;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.tv-chip {
+  display: inline-block;
+  margin: 0 8px 8px 0;
+  padding: 8px 16px;
+  font-size: 0.88rem;
+  color: #cdd4e0;
+  background: #151a22;
+  border: 1px solid #232b38;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tv-chip.is-active {
+  color: #08111f;
+  background: #4f8cff;
+  border-color: #4f8cff;
+  font-weight: 700;
+}
+
+.tv-grid {
+  margin: 0 -8px;
+}
+
+.tv-card {
+  display: inline-block;
+  vertical-align: top;
+  width: 220px;
+  margin: 8px;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: #10141b;
+  border: 1px solid #1c222c;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.tv-card:focus,
+.tv-card:hover {
+  border-color: #4f8cff;
+}
+
+.tv-card-art {
+  position: relative;
+  display: block;
+  height: 124px;
+  background: #171d26;
+}
+
+.tv-card-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tv-card-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 16px;
+}
+
+.tv-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+  background: rgba(6, 9, 14, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+.tv-badge-art {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+.tv-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.tv-dub {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #052e21;
+  background: #34d399;
+  border-radius: 999px;
+}
+
+.tv-card-meta {
+  display: block;
+  padding: 10px 12px 12px;
+}
+
+.tv-card-title {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.tv-card-cat {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.76rem;
+  color: #8b95a7;
+}
+
+.tv-empty {
+  padding: 30px 4px;
+  color: #8b95a7;
+}
+
+.tv-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(3, 5, 9, 0.94);
+}
+
+.tv-overlay.is-open {
+  display: block;
+}
+
+.tv-stage {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: #000000;
+}
+
+.tv-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000000;
+}
+
+.tv-stage-top {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  padding: 18px 24px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
+}
+
+.tv-stage-top > * {
+  margin-right: 12px;
+  vertical-align: middle;
+}
+
+.tv-close {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.tv-close svg {
+  width: 18px;
+  height: 18px;
+  margin: 9px;
+}
+
+.tv-stage-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.tv-stage-foot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 18px 24px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0));
+}
+
+.tv-stage-title {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.tv-stage-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: #a9b3c4;
+}
+
+.tv-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 420px;
+  padding: 20px 24px;
+  font-size: 0.95rem;
+  text-align: center;
+  color: #fecaca;
+  background: rgba(20, 8, 8, 0.92);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-radius: 12px;
+  transform: translate(-50%, -50%);
+}

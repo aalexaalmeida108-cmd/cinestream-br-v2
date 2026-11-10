@@ -274,3 +274,15 @@ O `.tpk` sai sem assinatura; a assinatura é feita pelo `signing_cli.jar` do Tiz
 Studio (ou pelo próprio IDE). Na TV: modo desenvolvedor em *Suporte → Smart Hub →
 TV Plus → Gerenciamento → Configurações de desenvolvedor* (PIN 0000) e *Conexão de
 TV* ligado, depois `Run` pelo Tizen Studio ou instalação do `.tpk` por USB.
+
+### Edição para TVs antigas
+
+`tv.html` é a versão do site feita para o navegador de 2015 que roda em boa parte
+das TVs Philco/LG com o motor Opera (Chrome 47): ES5 puro, `XMLHttpRequest` no
+lugar de `fetch`, sem variáveis de CSS, sem grid e o `hls.js` empacotado em ES5
+com o `MediaSource` prefixado renomeado. Os canais do Pluto chegam em H.264
+(segmentos `.ts`), que esse navegador decodifica.
+
+Na TV, abra `https://aalexaalmeida108-cmd.github.io/cinestream-br-v2/tv.html` e
+fixe a página como inicial ou nos favoritos — não há como instalar PWA nesse
+navegador.

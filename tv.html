@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineStream — TV</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/tv.css">
+</head>
+<body class="tv-page">
+
+  <header class="tv-header">
+    <div class="tv-brand">
+      <span class="tv-brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+          <path d="M10 9.5v5l4-2.5-4-2.5Z" fill="currentColor" stroke="none"></path>
+        </svg>
+      </span>
+      <span class="tv-brand-name">CINE<em>STREAM</em></span>
+    </div>
+
+    <form class="tv-search" id="tvSearchForm">
+      <input type="search" id="tvSearch" class="tv-search-input" placeholder="Buscar canal..." aria-label="Buscar canal" spellcheck="false">
+    </form>
+
+    <span class="tv-status" id="tvStatus">Carregando…</span>
+  </header>
+
+  <main class="tv-main">
+    <div class="tv-chips" id="tvChips"></div>
+    <section class="tv-grid" id="tvGrid" aria-label="Canais"></section>
+  </main>
+
+  <div class="tv-overlay" id="tvOverlay" aria-hidden="true">
+    <div class="tv-stage">
+      <video id="tvVideo" class="tv-video" controls autoplay playsinline webkit-playsinline></video>
+      <div class="tv-stage-top">
+        <button type="button" class="tv-close" id="tvClose" aria-label="Fechar player">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12"></path>
+          </svg>
+        </button>
+        <span class="tv-badge"><span class="tv-dot"></span>LIVE</span>
+        <span class="tv-stage-name" id="tvStageName"></span>
+      </div>
+      <div class="tv-stage-foot">
+        <span class="tv-stage-title" id="tvStageTitle"></span>
+        <span class="tv-stage-note" id="tvStageNote"></span>
+      </div>
+      <div class="tv-error" id="tvError" hidden></div>
+    </div>
+  </div>
+
+  <script src="assets/hls.min.js"></script>
+  <script src="js/tv.js"></script>
+</body>
+</html>
