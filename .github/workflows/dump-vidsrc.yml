@@ -51,6 +51,7 @@ jobs:
                   print(f"----- {label} #{index}")
                   print(body[max(0, match.start() - before):match.end() + after].replace("\\n", "\n"))
 
+          show("query object", r"var Q\s*=|Q=\{", 100, 1500, limit=2)
           show("audioPref", r"audioPref\s*=", 200, 700)
           show("qs build", r"qs\s*=", 400, 700)
           show("search params", r"searchParams|\.get\(", 250, 400, limit=6)
