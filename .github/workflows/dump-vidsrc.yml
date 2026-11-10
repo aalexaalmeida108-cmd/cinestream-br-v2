@@ -22,8 +22,19 @@ jobs:
           UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36")
 
+          HEADERS = {
+              "User-Agent": UA,
+              "Referer": "https://cinestream-br-v2.github.io/",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+              "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+              "Sec-Fetch-Dest": "iframe",
+              "Sec-Fetch-Mode": "navigate",
+              "Sec-Fetch-Site": "cross-site",
+              "Upgrade-Insecure-Requests": "1",
+          }
+
           def get(url):
-              req = urllib.request.Request(url, headers={"User-Agent": UA})
+              req = urllib.request.Request(url, headers=HEADERS)
               with urllib.request.urlopen(req, timeout=25) as r:
                   return r.status, r.read(400_000).decode("utf-8", "replace")
 
