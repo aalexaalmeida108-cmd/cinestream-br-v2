@@ -42,6 +42,7 @@
           spellcheck="false"
         >
         <button type="button" class="search-clear" id="searchClear" aria-label="Clear search" hidden>&times;</button>
+        <kbd class="search-kbd" aria-hidden="true">/</kbd>
       </form>
 
       <a class="header-live" href="live.html" aria-label="Watch free live TV channels">
@@ -50,6 +51,23 @@
       </a>
     </div>
   </header>
+
+  <aside class="donate-strip" id="donateStrip" aria-label="Apoie o projeto">
+    <div class="container donate-inner">
+      <p class="donate-copy">
+        <span class="donate-heart" aria-hidden="true">&#10084;</span>
+        <span><strong>Ajude a manter o CineStream no ar.</strong>
+        Uma doação de R$&nbsp;20 via PIX cobre hospedagem e banda do mês.</span>
+      </p>
+      <button class="donate-btn" id="donateOpen" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+          <path d="M2 10h20"></path>
+        </svg>
+        Doar R$&nbsp;20 via PIX
+      </button>
+    </div>
+  </aside>
 
   <nav class="catalog-nav" aria-label="Catalog categories">
     <div class="container nav-inner">
@@ -116,6 +134,11 @@
         Playback by <a href="https://watchplay.shop/" target="_blank" rel="noopener noreferrer">WatchPlay</a>.
         This site does not host any media.
       </p>
+      <p class="footer-meta">
+        <span id="lastUpdated">Catalog updated weekly</span>
+        <span class="footer-dot" aria-hidden="true">&middot;</span>
+        <button class="footer-link" id="donateOpenFooter" type="button">Apoiar via PIX</button>
+      </p>
     </div>
   </footer>
 
@@ -125,5 +148,33 @@
 
   <script src="js/recent.js" defer></script>
   <script src="js/app.js" defer></script>
+  <script src="js/donate.js" defer></script>
+
+  <div class="pix-modal" id="pixModal" role="dialog" aria-modal="true" aria-labelledby="pixTitle" hidden>
+    <div class="pix-card">
+      <button class="pix-close" id="pixClose" type="button" aria-label="Fechar">&times;</button>
+
+      <div class="pix-qr-wrap">
+        <img class="pix-qr" src="assets/pix-qr.svg" alt="QR Code PIX para doação de R$ 20" width="220" height="220">
+      </div>
+
+      <h2 class="pix-title" id="pixTitle">Apoie o CineStream</h2>
+      <p class="pix-sub">
+        Escaneie o QR Code no app do seu banco ou copie a chave abaixo.
+        Qualquer valor ajuda &mdash; a sugestão é <strong>R$ 20</strong>.
+      </p>
+
+      <div class="pix-key-row">
+        <code class="pix-key" id="pixKey">1088safary@gmail.com</code>
+        <button class="pix-copy" id="pixCopy" type="button">Copiar chave</button>
+      </div>
+
+      <button class="pix-brcode" id="pixBrCode" type="button">Copiar código PIX (copia e cola)</button>
+
+      <p class="pix-hint" id="pixStatus" role="status" aria-live="polite">
+        Chave PIX (e-mail) &middot; valor de referência R$ 20,00
+      </p>
+    </div>
+  </div>
 </body>
 </html>

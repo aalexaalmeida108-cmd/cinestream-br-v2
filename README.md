@@ -28,6 +28,34 @@ python3 -m http.server 8080
 Open <http://localhost:8080>. Opening `index.html` straight from the filesystem will not work because
 the browser blocks `fetch()` for `file://` URLs.
 
+## Automatic weekly updates
+
+The site refreshes itself every Monday at 06:17 UTC through
+`.github/workflows/refresh-catalog.yml`: it fetches the catalog, fills missing genres from IMDb,
+recounts episodes, validates the JSON, and commits the result. GitHub Pages redeploys on that
+commit, so no manual step is needed.
+
+To run the same pipeline from a checkout (cron, systemd timer or by hand):
+
+```bash
+./scripts/weekly_update.sh            # refresh + commit + push
+./scripts/weekly_update.sh --no-push  # refresh + commit only
+./scripts/weekly_update.sh --dry-run  # refresh, keep the tree dirty
+```
+
+The script logs progress, refuses to commit an empty or malformed catalog, and skips the commit
+when nothing changed. Cron example:
+
+```cron
+17 6 * * 1 cd /path/to/cinestream-br-v2 && ./scripts/weekly_update.sh >> .cache/weekly.log 2>&1
+```
+
+## Donations
+
+The site shows a PIX strip below the header and a QR modal (`js/donate.js`) with the key
+`1088safary@gmail.com` and a suggested R$ 20. The BR Code is a static EMV payload generated once
+(`assets/pix-qr.svg`), so the page needs no third-party QR service and no network call to render it.
+
 ## Refresh the catalog
 
 ```bash

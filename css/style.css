@@ -1036,3 +1036,333 @@ button {
     order: 3;
   }
 }
+
+/* ---- Donation strip ---------------------------------------------------- */
+
+.donate-strip {
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(90deg, rgba(52, 211, 153, 0.09), rgba(79, 140, 255, 0.06) 60%, transparent),
+    var(--bg-soft);
+}
+
+.donate-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 52px;
+  padding-block: 10px;
+}
+
+.donate-copy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.donate-copy strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.donate-heart {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 50%;
+  font-size: 0.78rem;
+}
+
+.donate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 9px 16px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #04140d;
+  background: linear-gradient(145deg, #4ade80, #22c55e);
+  border: 1px solid rgba(74, 222, 128, 0.5);
+  border-radius: 999px;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.donate-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.donate-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(34, 197, 94, 0.28);
+}
+
+.donate-btn:focus-visible {
+  outline: 2px solid #4ade80;
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .donate-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .donate-copy {
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+}
+
+/* ---- Search shortcut hint --------------------------------------------- */
+
+.search-kbd {
+  position: absolute;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted-2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.search-input:not(:placeholder-shown) ~ .search-kbd,
+.search-input:focus ~ .search-kbd {
+  display: none;
+}
+
+/* ---- Footer meta ------------------------------------------------------- */
+
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.footer-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted-2);
+}
+
+.footer-dot {
+  opacity: 0.6;
+}
+
+.footer-link {
+  padding: 0;
+  color: var(--muted-2);
+  background: none;
+  border: 0;
+  font-size: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.footer-link:hover {
+  color: var(--text);
+}
+
+/* ---- PIX modal --------------------------------------------------------- */
+
+body.has-modal {
+  overflow: hidden;
+}
+
+.pix-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 6, 9, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.pix-card {
+  position: relative;
+  width: min(420px, 100%);
+  padding: 26px 24px 22px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.pix-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+
+.pix-close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pix-qr-wrap {
+  width: 208px;
+  height: 208px;
+  margin: 0 auto 16px;
+  padding: 8px;
+  background: #fff;
+  border-radius: 14px;
+}
+
+.pix-qr {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pix-title {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+  letter-spacing: -0.01em;
+}
+
+.pix-sub {
+  margin: 0 0 16px;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.pix-key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.pix-key {
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86rem;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pix-copy,
+.pix-brcode {
+  padding: 8px 13px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #04140d;
+  background: linear-gradient(145deg, #4ade80, #22c55e);
+  border: 0;
+  border-radius: 8px;
+}
+
+.pix-brcode {
+  width: 100%;
+  margin-top: 10px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+}
+
+.pix-brcode:hover {
+  border-color: rgba(74, 222, 128, 0.55);
+  color: #86efac;
+}
+
+.pix-copy:hover {
+  filter: brightness(1.05);
+}
+
+.pix-hint {
+  margin: 14px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted-2);
+}
+
+.pix-hint.is-active {
+  color: #86efac;
+}
+
+/* Category tag shown when search spans every catalog. */
+.card-cat {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  padding: 3px 7px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(7, 9, 12, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+}
+
+.card:hover .card-cat,
+.card:focus-visible .card-cat {
+  opacity: 0;
+}
+
+/* Search-all call to action inside the empty state. */
+.empty-state .search-all {
+  margin-top: 8px;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (max-width: 720px) {
+  .donate-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

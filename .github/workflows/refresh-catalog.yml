@@ -52,6 +52,20 @@ jobs:
             python scripts/probe_episodes.py --workers 6
           fi
 
+      - name: Validate catalog JSON
+        run: |
+          python - <<'PY'
+          import json, sys
+          ok = True
+          for name in ("movies", "series", "animes"):
+              payload = json.load(open(f"data/{name}.json", encoding="utf-8"))
+              items = payload.get("items") or []
+              print(f"{name}: {len(items)} items")
+              if not items or payload.get("count") not in (None, len(items)):
+                  ok = False
+          sys.exit(0 if ok else 1)
+          PY
+
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"

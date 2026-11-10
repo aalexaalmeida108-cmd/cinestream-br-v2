@@ -38,6 +38,9 @@ const GENRE_LABELS = {
   drama: 'Drama'
 };
 const NEW_RELEASE_YEAR = 2025;
+const PREFS_KEY = 'cinestream:prefs';
+const SORTS = ['popular', 'rating', 'newest', 'title'];
+const CATEGORY_LABELS = { movies: 'Movie', series: 'Series', animes: 'Anime' };
 const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
 const numberFormat = new Intl.NumberFormat('en-US');
 
@@ -46,6 +49,7 @@ const state = {
   query: '',
   sort: 'popular',
   genre: 'all',
+  searchAll: false,
   visible: PAGE_SIZE,
   rendered: 0,
   cache: new Map(),
@@ -82,9 +86,78 @@ function init() {
   loadEpisodes();
   renderRecent();
 
+  const url = readUrlState();
+  const saved = loadPrefs();
+  const initial = url.category ||
+    (CATEGORIES[saved.category] ? saved.category : 'movies');
+  const sort = SORTS.includes(url.sort) ? url.sort :
+    (SORTS.includes(saved.sort) ? saved.sort : 'popular');
+
+  state.sort = sort;
+  el.sortSelect.value = sort;
+
+  const genre = validGenre(url.genre) ? url.genre : (validGenre(saved.genre) ? saved.genre : 'all');
+  const query = url.query || '';
+
+  if (query) {
+    el.searchInput.value = query;
+    el.searchClear.hidden = false;
+  }
+
+  switchCategory(initial, { updateHash: false, genre, query });
+
+  if (url.all && query) {
+    renderSearchAll();
+  }
+}
+
+function readUrlState() {
+  const params = new URLSearchParams(window.location.search);
   const hash = window.location.hash.replace('#', '');
-  const initial = CATEGORIES[hash] ? hash : 'movies';
-  switchCategory(initial, { updateHash: false });
+  return {
+    category: CATEGORIES[hash] ? hash : null,
+    genre: params.get('genre') || '',
+    query: params.get('q') || '',
+    sort: params.get('sort') || '',
+    all: params.get('all') === '1'
+  };
+}
+
+function validGenre(value) {
+  return value === 'lancamentos' || (value && GENRE_BITS[value]) ? value : '';
+}
+
+function loadPrefs() {
+  try {
+    const raw = window.localStorage.getItem(PREFS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function savePrefs() {
+  try {
+    window.localStorage.setItem(PREFS_KEY, JSON.stringify({
+      category: state.category,
+      genre: state.genre,
+      sort: state.sort
+    }));
+  } catch (error) {
+    // Storage can be unavailable in private mode; preferences are optional.
+  }
+}
+
+function syncUrl() {
+  const params = new URLSearchParams();
+  if (state.genre !== 'all') params.set('genre', state.genre);
+  if (state.query) params.set('q', state.query);
+  if (state.searchAll) params.set('all', '1');
+  if (state.sort !== 'popular') params.set('sort', state.sort);
+  const search = params.toString();
+  history.replaceState(null, '', (search ? '?' + search : '') + '#' + state.category);
 }
 
 function bindEvents() {
@@ -108,9 +181,30 @@ function bindEvents() {
     el.searchInput.focus();
   });
 
+  document.addEventListener('keydown', (event) => {
+    const tag = (event.target && event.target.tagName) || '';
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+      (event.target && event.target.isContentEditable);
+
+    if (event.key === '/' && !typing) {
+      event.preventDefault();
+      el.searchInput.focus();
+      el.searchInput.select();
+      return;
+    }
+
+    if (event.key === 'Escape' && document.activeElement === el.searchInput) {
+      el.searchInput.value = '';
+      applySearch('');
+      el.searchInput.blur();
+    }
+  });
+
   el.sortSelect.addEventListener('change', () => {
-    state.sort = el.sortSelect.value;
+    state.sort = SORTS.includes(el.sortSelect.value) ? el.sortSelect.value : 'popular';
     state.visible = PAGE_SIZE;
+    savePrefs();
+    syncUrl();
     render(true);
   });
 
@@ -164,24 +258,28 @@ function onTabKeydown(event) {
 
 async function switchCategory(key, options = {}) {
   if (!CATEGORIES[key]) return;
-  if (key === state.category && state.cache.has(key) && !state.query) return;
+  if (key === state.category && state.cache.has(key) && !state.query && options.query === undefined) return;
 
   state.category = key;
-  state.query = '';
+  state.query = options.query || '';
+  state.searchAll = false;
+  state.genre = options.genre !== undefined ? (validGenre(options.genre) || 'all') : 'all';
   state.visible = PAGE_SIZE;
   state.rendered = 0;
 
-  el.searchInput.value = '';
+  el.searchInput.value = state.query;
   el.searchInput.placeholder = CATEGORIES[key].placeholder;
-  el.searchClear.hidden = true;
+  el.searchClear.hidden = !state.query;
   el.sortSelect.value = state.sort;
   el.notice.hidden = true;
   el.endNote.hidden = true;
   updateTabs();
+  updateGenres();
   updateDocumentTitle();
+  savePrefs();
 
   if (options.updateHash !== false) {
-    history.replaceState(null, '', '#' + key);
+    syncUrl();
   }
 
   const requestId = ++state.requestId;
@@ -189,6 +287,7 @@ async function switchCategory(key, options = {}) {
 
   if (cached) {
     render(true);
+    updateGenreAvailability();
     return;
   }
 
@@ -198,7 +297,8 @@ async function switchCategory(key, options = {}) {
   try {
     const items = await loadCategory(key);
     if (requestId !== state.requestId) return;
-    render(true, items);
+    if (state.searchAll && state.query) return; // the all-categories render owns the grid
+    render(true);
   } catch (error) {
     if (requestId !== state.requestId) return;
     showLoadError(error);
@@ -219,6 +319,7 @@ async function loadCategory(key) {
   }
 
   const items = payload.items.map(prepareItem);
+  items.forEach((item) => { item._cat = key; });
   state.cache.set(key, items);
   return items;
 }
@@ -245,6 +346,14 @@ function normalize(value) {
 function currentItems() {
   let items = state.cache.get(state.category) || [];
 
+  if (state.searchAll && state.query) {
+    items = [];
+    for (const key of Object.keys(CATEGORIES)) {
+      const list = state.cache.get(key);
+      if (list) items = items.concat(list);
+    }
+  }
+
   if (state.genre !== 'all') {
     if (state.genre === 'lancamentos') {
       items = items.filter((item) => (Number(item.y) || 0) >= NEW_RELEASE_YEAR);
@@ -262,27 +371,46 @@ function currentItems() {
   return items.filter((item) => tokens.every((token) => item._search.includes(token)));
 }
 
+function relevance(item, tokens) {
+  const original = normalize(item.t);
+  const translated = normalize(item.tp);
+  let score = 0;
+  for (const token of tokens) {
+    if (original === token || translated === token) score += 10;
+    else if (original.startsWith(token) || translated.startsWith(token)) score += 6;
+    else if (original.includes(' ' + token) || translated.includes(' ' + token)) score += 4;
+    else score += 1;
+    if (String(item.y) === token) score += 5;
+  }
+  return score;
+}
+
 function sortedItems(items) {
   const list = items.slice();
+  const tokens = state.query ? normalize(state.query).split(' ').filter(Boolean) : [];
+  const rank = tokens.length
+    ? new Map(list.map((item) => [item, relevance(item, tokens)]))
+    : null;
 
-  switch (state.sort) {
-    case 'rating':
-      list.sort((a, b) => (b._score - a._score) || ((b.v || 0) - (a.v || 0)));
-      break;
-    case 'newest':
-      list.sort((a, b) => ((b.y || 0) - (a.y || 0)) ||
-        ((b.v || 0) - (a.v || 0)) || collator.compare(a.t || '', b.t || ''));
-      break;
-    case 'title':
-      list.sort((a, b) => collator.compare(a.t || '', b.t || ''));
-      break;
-    case 'popular':
-    default:
-      list.sort((a, b) => ((b.v || 0) - (a.v || 0)) ||
-        (b._score - a._score) || collator.compare(a.t || '', b.t || ''));
-      break;
-  }
+  const byBase = (a, b) => {
+    switch (state.sort) {
+      case 'rating':
+        return (b._score - a._score) || ((b.v || 0) - (a.v || 0));
+      case 'newest':
+        return ((b.y || 0) - (a.y || 0)) ||
+          ((b.v || 0) - (a.v || 0)) || collator.compare(a.t || '', b.t || '');
+      case 'title':
+        return collator.compare(a.t || '', b.t || '');
+      case 'popular':
+      default:
+        return ((b.v || 0) - (a.v || 0)) ||
+          (b._score - a._score) || collator.compare(a.t || '', b.t || '');
+    }
+  };
 
+  // While searching, exact and prefix matches come first; the chosen sort
+  // breaks ties instead of scattering the best match down the grid.
+  list.sort((a, b) => (rank ? (rank.get(b) - rank.get(a)) : 0) || byBase(a, b));
   return list;
 }
 
@@ -304,6 +432,7 @@ function render(reset, providedItems) {
       : 'No titles available');
     el.loadMore.hidden = true;
     el.endNote.hidden = true;
+    updateGenreAvailability();
     return;
   }
 
@@ -321,6 +450,7 @@ function render(reset, providedItems) {
   const hasMore = state.rendered < total;
   el.loadMore.hidden = !hasMore;
   el.endNote.hidden = hasMore || total <= PAGE_SIZE;
+  updateGenreAvailability();
 }
 
 function loadMore() {
@@ -336,8 +466,9 @@ function setResultCount(text) {
 
 function summaryText(total) {
   if (state.query) {
+    const scope = state.searchAll ? ' across all categories' : '';
     return numberFormat.format(total) + (total === 1 ? ' result for ' : ' results for ') +
-      '\u201c' + state.query + '\u201d';
+      '\u201c' + state.query + '\u201d' + scope;
   }
   const meta = CATEGORIES[state.category];
   if (state.genre === 'lancamentos') {
@@ -382,6 +513,11 @@ function createCard(item, options = {}) {
     badge.className = 'recent-badge';
     badge.textContent = options.badge;
     poster.appendChild(badge);
+  } else if (state.searchAll && item._cat) {
+    const tag = document.createElement('span');
+    tag.className = 'card-cat';
+    tag.textContent = CATEGORY_LABELS[item._cat] || CATEGORIES[item._cat].label;
+    poster.appendChild(tag);
   }
 
   const play = document.createElement('span');
@@ -564,6 +700,39 @@ function emptyState() {
     '<h2>No results</h2>',
     '<p>Try a different title, check the spelling, or switch to another category.</p>'
   ].join('');
+
+  const actions = document.createElement('div');
+  actions.className = 'empty-actions';
+
+  if (state.query && !state.searchAll) {
+    const searchAll = document.createElement('button');
+    searchAll.type = 'button';
+    searchAll.className = 'btn search-all';
+    searchAll.textContent = 'Search all categories';
+    searchAll.addEventListener('click', renderSearchAll);
+    actions.appendChild(searchAll);
+  }
+
+  if (state.query || state.genre !== 'all') {
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'btn btn-ghost';
+    clear.textContent = 'Clear filters';
+    clear.addEventListener('click', () => {
+      state.searchAll = false;
+      state.genre = 'all';
+      state.query = '';
+      el.searchInput.value = '';
+      el.searchClear.hidden = true;
+      updateGenres();
+      updateDocumentTitle();
+      syncUrl();
+      render(true);
+    });
+    actions.appendChild(clear);
+  }
+
+  if (actions.childElementCount) wrap.appendChild(actions);
   return wrap;
 }
 
@@ -598,12 +767,14 @@ function updateTabs() {
 function updateDocumentTitle() {
   const label = CATEGORIES[state.category].label;
   let prefix = '';
-  if (state.genre === 'lancamentos') {
+  if (state.query) {
+    prefix = '\u201c' + state.query + '\u201d \u00b7 ';
+  } else if (state.genre === 'lancamentos') {
     prefix = 'New releases \u00b7 ';
   } else if (state.genre !== 'all') {
     prefix = GENRE_LABELS[state.genre] + ' \u00b7 ';
   }
-  document.title = prefix + label + ' \u2014 CineStream';
+  document.title = prefix + (state.searchAll ? 'All categories' : label) + ' \u2014 CineStream';
 }
 
 function updateTabCounts() {
@@ -622,9 +793,21 @@ async function loadIndex() {
     if (!response.ok) return;
     state.index = await response.json();
     updateTabCounts();
+    updateFooterDate(state.index.generated_at);
   } catch (error) {
     // Counts are a progressive enhancement; the catalog still works without them.
   }
+}
+
+function updateFooterDate(value) {
+  const node = document.getElementById('lastUpdated');
+  if (!node || !value) return;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return;
+  const formatted = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric'
+  }).format(date);
+  node.textContent = 'Catalog updated ' + formatted + ' \u00b7 weekly';
 }
 
 function showLoadError(error) {
@@ -652,9 +835,13 @@ function showLoadError(error) {
 }
 
 function applySearch(value) {
-  state.query = value.trim();
+  const next = value.trim();
+  const changed = next !== state.query;
+  state.query = next;
   state.visible = PAGE_SIZE;
   el.searchClear.hidden = !state.query;
+
+  if (!state.query) state.searchAll = false;
 
   if (state.query && state.genre !== 'all') {
     state.genre = 'all';
@@ -662,7 +849,37 @@ function applySearch(value) {
     updateDocumentTitle();
   }
 
+  if (changed) savePrefs();
+  syncUrl();
+
+  if (state.searchAll && state.query) {
+    renderSearchAll();
+    return;
+  }
+
   if (!state.cache.has(state.category)) return;
+  render(true);
+}
+
+// Loads every catalog and shows matches across movies, series and anime.
+// Only used when the user asks for it (or a scoped search finds nothing),
+// so the extra ~3 MB of JSON is not paid on a normal visit.
+async function renderSearchAll() {
+  if (!state.query) return;
+  state.searchAll = true;
+  state.visible = PAGE_SIZE;
+  state.requestId += 1;
+  setResultCount('Searching all categories...');
+
+  try {
+    await Promise.all(Object.keys(CATEGORIES).map((key) => loadCategory(key)));
+  } catch (error) {
+    showLoadError(error);
+    return;
+  }
+
+  updateDocumentTitle();
+  syncUrl();
   render(true);
 }
 
@@ -717,6 +934,7 @@ async function loadGenres() {
     if (!Object.keys(payload.items).length) return;
     state.genres = payload.items;
     if (el.genreBar) el.genreBar.hidden = false;
+    updateGenreAvailability();
   } catch (error) {
     // Genre filters are optional; the catalog still works without them.
   }
@@ -727,6 +945,31 @@ function updateGenres() {
     const active = chip.dataset.genre === state.genre;
     chip.classList.toggle('is-active', active);
     chip.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
+// Hides genre chips that have no titles in the current catalog instead of
+// leaving five filters that always return an empty grid.
+function updateGenreAvailability() {
+  if (!state.genres || !el.genreChips) return;
+  const items = state.cache.get(state.category);
+  if (!items) return;
+
+  el.genreChips.forEach((chip) => {
+    const genre = chip.dataset.genre;
+    if (genre === 'all' || genre === state.genre) {
+      chip.hidden = false;
+      return;
+    }
+
+    let hasItems = false;
+    if (genre === 'lancamentos') {
+      hasItems = items.some((item) => (Number(item.y) || 0) >= NEW_RELEASE_YEAR);
+    } else {
+      const bit = GENRE_BITS[genre] || 0;
+      hasItems = items.some((item) => ((state.genres[String(item.i)] || 0) & bit) !== 0);
+    }
+    chip.hidden = !hasItems;
   });
 }
 
@@ -741,6 +984,8 @@ function setGenre(value) {
     chip.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   updateDocumentTitle();
+  savePrefs();
+  syncUrl();
   if (!state.cache.has(state.category)) return;
   render(true);
 }
