@@ -732,6 +732,58 @@ async function genreSet(genre) {
   return new Set(ids);
 }
 
+// Lista M3U da assinatura do usuario (?m3u=URL). Toda entrada toca
+// dentro do player: e o caminho para os canais que a conta dele cobre
+// (operadora, Plex TV, lista liberada).
+function readM3uUrl() {
+  const fromUrl = new URLSearchParams(location.search).get('m3u');
+  if (fromUrl) {
+    try { localStorage.setItem('cineM3uUrl', fromUrl); } catch (_) {}
+    return fromUrl;
+  }
+  try {
+    const stored = localStorage.getItem('cineM3uUrl') || '';
+    if (stored) return stored;
+  } catch (_) {}
+  // A box aponta para a propria lista (mesma origem).
+  return window.CINESTREAM_M3U || '';
+}
+
+function parseM3U(text) {
+  const out = [];
+  const lines = String(text || '').split(/\r?\n/);
+  let pending = null;
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) return;
+    if (line.startsWith('#EXTINF')) {
+      const attrs = line.match(/([a-zA-Z0-9-]+)="([^"]*)"/g) || [];
+      const map = {};
+      attrs.forEach((pair) => {
+        const at = pair.indexOf('="');
+        map[pair.slice(0, at)] = pair.slice(at + 2, -1);
+      });
+      const comma = line.lastIndexOf(',');
+      pending = {
+        title: (comma >= 0 ? line.slice(comma + 1) : map['tvg-name'] || '').trim(),
+        logo: map['tvg-logo'] || '',
+        group: map['group-title'] || ''
+      };
+      return;
+    }
+    if (line.startsWith('#')) return;
+    if (!pending) return;
+    out.push({
+      title: pending.title || 'Canal',
+      logo: pending.logo,
+      group: pending.group,
+      url: line
+    });
+    pending = null;
+  });
+  return out;
+}
+
 /* -------------------------------------------------------------------- m3u */
 // A lista M3U da assinatura do usuario (?m3u=URL): todos os canais que
 // a conta dele cobre, tocando dentro do player. E o caminho para os
