@@ -119,9 +119,10 @@ const state = {
   plexChannels: [],
   plutoChannels: [],
   extras: [],
+  globo: [],
   categories: [],
-  counts: { local: 0, plex: 0, pluto: 0, extras: 0 },
-  loaded: { local: false, plex: false, pluto: false, extras: false },
+  counts: { local: 0, plex: 0, pluto: 0, extras: 0, globo: 0 },
+  loaded: { local: false, plex: false, pluto: false, extras: false, globo: false },
   byId: new Map(),
   genreMap: null,
   airings: new Map(),
@@ -506,6 +507,14 @@ async function boot(force) {
     state.source = 'plex';
     buildSources();
     showNotice(`Local channels unavailable. ${error.message}.`, 'error');
+  }
+
+  // Globoplay lineup: publica, sem login.
+  try {
+    await loadGlobo();
+  } catch (_) {
+    state.loaded.globo = false;
+    state.counts.globo = 0;
   }
 
   // Extras (SPN, Premiere + whatever the viewer's own M3U carries) load in
@@ -964,6 +973,92 @@ async function genreSet(genre) {
   return new Set(ids);
 }
 
+/* ------------------------------------------------------------------ globo */
+// Lineup oficial da Globoplay (data/globoplay-channels.json, gerada por
+// scripts/fetch_globoplay.py). O sinal ao vivo de qualquer canal da Globo
+// e autorizado por sessao da conta: o site so entrega o manifesto para
+// quem esta logado, e o OIDC da Globo so aceita redirect no dominio
+// oficial. Entao o cartao abre o player oficial -- onde a assinatura do
+// usuario vale -- e o estado por canal vem do endpoint publico de video
+// (CORS aberto), que diz se o canal exige assinatura e se esta no ar.
+
+const GLOBO = {
+  file: 'data/globoplay-channels.json',
+  info: 'https://security.video.globo.com/videos/'
+};
+
+async function globoInfo(mediaId) {
+  const response = await fetch(GLOBO.info + mediaId + '/info', {
+    method: 'POST',
+    cache: 'no-cache'
+  });
+  if (!response.ok) throw new Error('info HTTP ' + response.status);
+  return response.json();
+}
+
+async function loadGlobo() {
+  const payload = await fetchJson(GLOBO.file);
+  const list = Array.isArray(payload.channels) ? payload.channels : [];
+  if (!list.length) throw new Error('no globo channels');
+
+  const channels = list.map((raw, index) => ({
+    id: String(raw.mediaId || index),
+    epgKey: String(raw.mediaId || index),
+    slug: String(raw.slug || raw.mediaId || index),
+    title: String(raw.name || raw.slug || 'Canal'),
+    summary: raw.free
+      ? 'Grátis com Conta Globo'
+      : 'Assinatura necessária (Premiere, sportv, telecine...)',
+    thumb: raw.logo || '',
+    art: raw.logo || '',
+    language: 'pt',
+    hd: true,
+    streamKey: raw.url || '',
+    playUrl: '',
+    link: raw.url || ('https://globoplay.globo.com/' + raw.slug +
+                      '/ao-vivo/' + raw.mediaId + '/'),
+    match: raw.slug || '',
+    group: raw.category || 'Globoplay',
+    categories: [raw.category || 'Globoplay'],
+    free: !!raw.free,
+    globo: true,
+    state: null
+  }));
+
+  state.globo = channels;
+  state.counts.globo = channels.length;
+  state.loaded.globo = true;
+  buildSources();
+
+  // Estado ao vivo de cada canal (o que esta passando agora). Roda sempre,
+  // mesmo com a fonte ainda fora da tela: quando o usuario abrir a aba o
+  // card ja sabe se o canal e gratis, se exige assinatura e o programa.
+  channels.forEach(async (channel) => {
+    try {
+      const info = await globoInfo(channel.id);
+      channel.state = {
+        program: info.program || info.title || '',
+        lock: !!info.lock,
+        location: info.available_in_location !== false,
+        drm: !!info.drm
+      };
+    } catch (_) {
+      channel.state = { program: '', lock: false, location: true };
+    }
+    if (state.source === 'globo') render();
+  });
+
+  if (state.source !== 'globo') return;
+  state.channels = channels;
+  state.byId = new Map(channels.map((channel) => [channel.id, channel]));
+  state.categories = Array.from(
+    new Set(channels.flatMap((channel) => channel.categories || []))
+  );
+  buildFilters();
+  el.count.textContent = `${channels.length} channels`;
+  render();
+}
+
 /* ------------------------------------------------------------------- grid */
 
 function buildSources() {
@@ -973,6 +1068,7 @@ function buildSources() {
   entries.push(['plex', 'Plex']);
   if (PLUTO.enabled) entries.push(['pluto', 'Pluto TV BR']);
   if (state.loaded.extras || state.counts.extras) entries.push(['extras', 'Extras']);
+  if (state.loaded.globo || state.counts.globo) entries.push(['globo', 'Globoplay']);
 
   el.sources.replaceChildren(
     ...entries.map(([key, label]) => {
@@ -1016,6 +1112,28 @@ async function switchSource(name) {
       state.source = 'plex';
       buildSources();
       switchSource('plex');
+    }
+    return;
+  }
+  if (name === 'globo' && !state.loaded.globo) {
+    state.source = 'globo';
+    state.genre = 'all';
+    state.lang = 'all';
+    state.query = '';
+    el.search.value = '';
+    el.searchClear.hidden = true;
+    state.channels = [];
+    state.byId = new Map();
+    buildSources();
+    buildFilters();
+    el.count.textContent = 'Loading…';
+    el.grid.replaceChildren();
+    showNotice('Loading Globoplay lineup…', 'info');
+    try {
+      await loadGlobo();
+      hideNotice();
+    } catch (error) {
+      showNotice(`Could not load the Globoplay lineup. ${error.message}.`, 'error');
     }
     return;
   }
@@ -1077,7 +1195,9 @@ async function switchSource(name) {
       ? state.localChannels
       : name === 'extras'
         ? state.extras
-        : state.plexChannels;
+        : name === 'globo'
+          ? state.globo
+          : state.plexChannels;
   state.channels = channels;
   state.byId = new Map(channels.map((channel) => [channel.id, channel]));
   buildSources();
@@ -1089,7 +1209,8 @@ function buildFilters() {
   const pluto = state.source === 'pluto';
   const local = state.source === 'local';
   const extras = state.source === 'extras';
-  const list = pluto || extras
+  const globo = state.source === 'globo';
+  const list = pluto || extras || globo
     ? [['all', 'Todos']].concat(state.categories.map((category) => [category, category]))
     : local
       ? [['all', 'All']]
@@ -1152,6 +1273,14 @@ async function render() {
   let allowed = null;
   if (state.source === 'local') {
     allowed = null;
+  } else if (state.source === 'globo') {
+    allowed = state.genre === 'all'
+      ? null
+      : new Set(
+        state.channels
+          .filter((channel) => (channel.categories || []).includes(state.genre))
+          .map((channel) => channel.id)
+      );
   } else if (state.source === 'extras') {
     allowed = state.genre === 'all'
       ? null
@@ -1239,6 +1368,14 @@ function channelCard(channel) {
   badge.className = 'live-badge';
   badge.innerHTML = '<span class="live-dot"></span>LIVE';
   art.appendChild(badge);
+
+  // Globoplay: o canal abre no player oficial (a assinatura vale la).
+  if (channel.globo) {
+    const tier = document.createElement('span');
+    tier.className = 'live-tier' + (channel.free ? ' is-free' : ' is-sub');
+    tier.textContent = channel.free ? 'GRATIS' : 'ASSINATURA';
+    art.appendChild(tier);
+  }
 
   if (channel.hd) {
     const hd = document.createElement('span');
@@ -1425,8 +1562,9 @@ function cssEscape(value) {
 /* ----------------------------------------------------------------- player */
 
 async function openChannel(channel) {
-  // Some channels are not open streams (SPN, Premiere): the only legal way
-  // to watch them is the broadcaster's own player. Open it and say so.
+  // Some channels are not open streams (SPN, Premiere, every Globoplay
+  // channel): the only legal way to watch them is the broadcaster's own
+  // player, where the viewer's subscription counts. Open it and say so.
   if (channel.link && !channel.playUrl) {
     showNotice(`Opening ${channel.title} on the official player…`, 'info');
     window.open(channel.link, '_blank', 'noopener');

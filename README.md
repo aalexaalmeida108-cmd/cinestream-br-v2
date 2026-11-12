@@ -326,3 +326,36 @@ Buscar e redistribuir o sinal de SPN/Premiere por conta própria: além de
 não ser legal (Lei 9.610/98, o sinal é da Globo), o Globoplay protege o
 conteúdo com Widevine e o Chromium do TV Box não tem o CDM. O caminho
 honesto é o player oficial ou a lista da sua própria assinatura.
+
+## Globoplay (TV Globo, sportv, Premiere, Telecine, GNT, Multishow...)
+
+A aba **Globoplay** traz a lineup oficial de canais ao vivo da Globo, lida
+do proprio site (`globoplay.globo.com`) por `scripts/fetch_globoplay.py`,
+que tambem consulta o endpoint publico de video de cada canal
+(`security.video.globo.com/videos/<id>/info`, CORS aberto) para saber o
+que esta no ar, se o canal e gratis e se exige assinatura.
+
+```
+33 canais: TV Globo, GE TV, Futura, CBN SP/RJ, Receitas/Malhaçao/DPA Fast
+           (grátis com Conta Globo) e sportv 1/2/3, Premiere, Combate,
+           GloboNews, Multishow, GNT, Globoplay Novelas, Gloob, Gloobinho,
+           Megapix, Universal, USA, Canal Brasil, OFF, BIS, Modo Viagem e
+           Telecine (7 canais) — todos com assinatura.
+```
+
+**Por que o cartao abre o player oficial em vez de tocar aqui:** o sinal
+ao vivo da Globo e autorizado por sessao. O site so entrega o manifesto
+para quem esta logado, e o OIDC da Globo (`goidc.globo.com`, client
+`globoplay-web@globoid-connect`) so aceita redirect URI no dominio
+oficial — um dominio nosso e recusado com
+`redirect_uri does not match any of the OAuth 2.0 Client's pre-registered
+redirect urls`. Como a assinatura vale no player oficial, o cartao abre
+exatamente la: um clique e o Premiere/Premiere do seu jeito, com a sua
+conta.
+
+**Para tocar dentro do nosso player:** o caminho e um M3U da sua assinatura
+(operadora, Plex TV, lista liberada) — o sinal vem em HLS limpo在这些
+canais e o player toca normal. Use a aba **Extras** com a lista da sua
+operadora (ela tem SPN e Premiere); se a lista trouxer um canal chamado
+`SPN` ou `Premiere`, o cartao deixa de abrir a pagina oficial e passa a
+tocar aqui dentro.

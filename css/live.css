@@ -651,3 +651,26 @@ body.live-playing {
   color: #dbeafe;
   border-bottom-color: #dbeafe;
 }
+
+.live-tier {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+}
+
+.live-tier.is-free {
+  background: rgba(46, 204, 113, 0.92);
+  color: #06210f;
+}
+
+.live-tier.is-sub {
+  background: rgba(229, 9, 47, 0.92);
+  color: #fff;
+}
