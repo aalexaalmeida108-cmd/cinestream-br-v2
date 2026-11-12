@@ -118,11 +118,10 @@ const state = {
   localChannels: [],
   plexChannels: [],
   plutoChannels: [],
-  futebol: [],
   m3u: [],
   categories: [],
-  counts: { local: 0, plex: 0, pluto: 0, futebol: 0, m3u: 0 },
-  loaded: { local: false, plex: false, pluto: false, futebol: false, m3u: false },
+  counts: { local: 0, plex: 0, pluto: 0, m3u: 0 },
+  loaded: { local: false, plex: false, pluto: false, m3u: false },
   byId: new Map(),
   genreMap: null,
   airings: new Map(),
@@ -284,14 +283,6 @@ async function boot(force) {
       state.loaded.m3u = false;
       state.counts.m3u = 0;
     }
-  }
-
-  // Futebol: Pluto Esportes + as opcoes livres e oficiais do futebol.
-  try {
-    await loadFutebol();
-  } catch (_) {
-    state.loaded.futebol = false;
-    state.counts.futebol = 0;
   }
 
   // Plex stays available as a second tab; failures do not block Local.
@@ -566,8 +557,7 @@ async function plutoBoot(force = false) {
 // masterJWTPassthrough + stitcherParams (device/session identity from boot).
 async function plutoUrl(channel, forceBoot = false) {
   const session = await plutoBoot(forceBoot);
-  const channelId = channel.plutoId || channel.id;
-  const path = `/v2/stitch/hls/channel/${encodeURIComponent(channelId)}/master.m3u8`;
+  const path = `/v2/stitch/hls/channel/${encodeURIComponent(channel.id)}/master.m3u8`;
   const query = new URLSearchParams({
     jwt: session.token,
     masterJWTPassthrough: 'true',
@@ -742,153 +732,6 @@ async function genreSet(genre) {
   return new Set(ids);
 }
 
-/* ---------------------------------------------------------------- futebol */
-// Uma aba so com futebol: os canais de esporte do Pluto (tocam inline,
-// ja resolvidos pelo stitcher) e as opcoes oficiais e gratuitas do
-// futebol brasileiro, que abrem no player de cada emissora.
-//
-// O catalogo do Pluto ja traz 11 canais de esporte (FIFA+, UFC, NFL,
-// Red Bull TV, Barca 24H...). Eles tocam aqui dentro como qualquer
-// outro canal.
-
-const FUTEBOL = {
-  file: 'data/futebol.json'
-};
-
-async function fetchJson(url) {
-  const response = await fetch(url, { cache: 'no-cache' });
-  if (!response.ok) throw new Error(`${url} HTTP ${response.status}`);
-  return response.json();
-}
-
-// Lista M3U da assinatura do usuario (?m3u=URL). Toda entrada toca
-// dentro do player: e o caminho para os canais que a sua conta cobre
-// (operadora, Plex TV, lista liberada) -- incluindo SPN e Premiere
-// quando a sua lista tem esses canais.
-function readM3uUrl() {
-  const fromUrl = new URLSearchParams(location.search).get('m3u');
-  if (fromUrl) {
-    try { localStorage.setItem('cineM3uUrl', fromUrl); } catch (_) {}
-    return fromUrl;
-  }
-  try { return localStorage.getItem('cineM3uUrl') || ''; } catch (_) { return ''; }
-}
-
-function parseM3U(text) {
-  const out = [];
-  const lines = String(text || '').split(/\r?\n/);
-  let pending = null;
-  lines.forEach((rawLine) => {
-    const line = rawLine.trim();
-    if (!line) return;
-    if (line.startsWith('#EXTINF')) {
-      const attrs = line.match(/([a-zA-Z0-9-]+)="([^"]*)"/g) || [];
-      const map = {};
-      attrs.forEach((pair) => {
-        const at = pair.indexOf('="');
-        map[pair.slice(0, at)] = pair.slice(at + 2, -1);
-      });
-      const comma = line.lastIndexOf(',');
-      pending = {
-        title: (comma >= 0 ? line.slice(comma + 1) : map['tvg-name'] || '').trim(),
-        logo: map['tvg-logo'] || '',
-        group: map['group-title'] || ''
-      };
-      return;
-    }
-    if (line.startsWith('#')) return;
-    if (!pending) return;
-    out.push({
-      title: pending.title || 'Canal',
-      logo: pending.logo,
-      group: pending.group,
-      url: line
-    });
-    pending = null;
-  });
-  return out;
-}
-
-const PALAVRAS_ESPORTE = [
-  'esporte', 'sport', 'futebol', 'fifa', 'ufc', 'nfl', 'mma', 'racing',
-  'racer', 'red bull', 'barça', 'barca', 'poker', 'combat', 'sft'
-];
-
-function pareceEsporte(channel) {
-  const nome = String(channel.title || '').toLowerCase();
-  const categoria = String((channel.categories || []).join(' ')).toLowerCase();
-  if (categoria.indexOf('esport') >= 0) return true;
-  return PALAVRAS_ESPORTE.some((palavra) => nome.indexOf(palavra) >= 0);
-}
-
-async function loadFutebol() {
-  const canais = [];
-
-  // 1) os canais de esporte do Pluto: tocam inline. A lineup do Pluto
-  //    precisa estar carregada (o catalogo vem do proprio repositorio).
-  if (!state.plutoChannels || !state.plutoChannels.length) {
-    try {
-      await loadPluto();
-    } catch (_) {
-      /* segue sem os canais do Pluto */
-    }
-  }
-  const pluto = state.plutoChannels || [];
-  pluto.forEach((channel) => {
-    if (!pareceEsporte(channel)) return;
-    canais.push(Object.assign({}, channel, {
-      id: 'pluto-' + channel.id,
-      plutoId: channel.id,
-      futebol: true,
-      categories: ['Pluto Esportes']
-    }));
-  });
-
-  // 2) as opcoes oficiais e gratuitas (abre no player da emissora).
-  let oficiais = [];
-  try {
-    oficiais = await fetchJson(FUTEBOL.file);
-  } catch (_) {
-    oficiais = [];
-  }
-  (Array.isArray(oficiais) ? oficiais : []).forEach((raw, index) => {
-    canais.push({
-      id: String(raw.id || 'fut-' + index),
-      epgKey: String(raw.id || 'fut-' + index),
-      slug: String(raw.id || 'fut-' + index),
-      title: String(raw.name || 'Canal'),
-      summary: raw.note || '',
-      thumb: raw.logo || '',
-      art: raw.logo || '',
-      language: 'pt',
-      hd: true,
-      streamKey: raw.url || '',
-      playUrl: '',
-      link: raw.url || '',
-      categories: [raw.group || 'Grátis'],
-      free: raw.free !== false,
-      futebol: true
-    });
-  });
-
-  if (!canais.length) throw new Error('no football channels');
-
-  state.futebol = canais;
-  state.counts.futebol = canais.length;
-  state.loaded.futebol = true;
-  buildSources();
-
-  if (state.source !== 'futebol') return;
-  state.channels = canais;
-  state.byId = new Map(canais.map((channel) => [channel.id, channel]));
-  state.categories = Array.from(
-    new Set(canais.flatMap((channel) => channel.categories || []))
-  );
-  buildFilters();
-  el.count.textContent = `${canais.length} channels`;
-  render();
-}
-
 /* -------------------------------------------------------------------- m3u */
 // A lista M3U da assinatura do usuario (?m3u=URL): todos os canais que
 // a conta dele cobre, tocando dentro do player. E o caminho para os
@@ -915,7 +758,6 @@ async function loadM3u() {
     playUrl: entry.url,
     link: '',
     categories: [entry.group || 'Minha lista'],
-    futebol: false
   }));
   if (!canais.length) throw new Error('M3U sem canais');
 
@@ -943,7 +785,6 @@ function buildSources() {
   if (state.loaded.local || state.counts.local) entries.push(['local', 'Local']);
   entries.push(['plex', 'Plex']);
   if (PLUTO.enabled) entries.push(['pluto', 'Pluto TV BR']);
-  if (state.loaded.futebol || state.counts.futebol) entries.push(['futebol', 'Futebol']);
   if (readM3uUrl()) entries.push(['m3u', 'Minha lista']);
 
   el.sources.replaceChildren(
@@ -1013,8 +854,8 @@ async function switchSource(name) {
     }
     return;
   }
-  if (name === 'futebol' && !state.loaded.futebol) {
-    state.source = 'futebol';
+  if (name === 'm3u' && !state.loaded.m3u) {
+    state.source = 'm3u';
     state.genre = 'all';
     state.lang = 'all';
     state.query = '';
@@ -1026,12 +867,12 @@ async function switchSource(name) {
     buildFilters();
     el.count.textContent = 'Loading…';
     el.grid.replaceChildren();
-    showNotice('Loading football channels…', 'info');
+    showNotice('Loading your list…', 'info');
     try {
-      await loadFutebol();
+      await loadM3u();
       hideNotice();
     } catch (error) {
-      showNotice(`Could not load football channels. ${error.message}.`, 'error');
+      showNotice(`Could not load your list. ${error.message}.`, 'error');
     }
     return;
   }
@@ -1069,11 +910,9 @@ async function switchSource(name) {
     ? state.plutoChannels
     : name === 'local'
       ? state.localChannels
-      : name === 'futebol'
-        ? state.futebol
-        : name === 'm3u'
-          ? state.m3u
-          : state.plexChannels;
+      : name === 'm3u'
+        ? state.m3u
+        : state.plexChannels;
   state.channels = channels;
   state.byId = new Map(channels.map((channel) => [channel.id, channel]));
   buildSources();
@@ -1084,9 +923,8 @@ async function switchSource(name) {
 function buildFilters() {
   const pluto = state.source === 'pluto';
   const local = state.source === 'local';
-  const futebol = state.source === 'futebol';
   const m3u = state.source === 'm3u';
-  const list = pluto || futebol || m3u
+  const list = pluto || m3u
     ? [['all', 'Todos']].concat(state.categories.map((category) => [category, category]))
     : local
       ? [['all', 'All']]
@@ -1157,7 +995,7 @@ async function render() {
           .filter((channel) => (channel.categories || []).includes(state.genre))
           .map((channel) => channel.id)
       );
-  } else if (state.source === 'futebol') {
+  } else if (state.source === 'm3u') {
     allowed = state.genre === 'all'
       ? null
       : new Set(
@@ -1488,12 +1326,6 @@ async function startPlayback(channel) {
   // expired JWT without tearing the player down.
   const loadMaster = async (forceBoot = false) => {
     if (state.source === 'local') return channel.playUrl;
-    if (state.source === 'futebol') {
-      if (channel.futebol && channel.plutoId) {
-        return plutoUrl(channel, forceBoot);
-      }
-      return channel.playUrl;
-    }
     if (state.source === 'm3u') return channel.playUrl;
     if (state.source === 'pluto') return plutoUrl(channel, forceBoot);
     return `${PLEX.epg}/library/parts/${encodeURIComponent(channel.id)}.m3u8?${tokenQuery(
