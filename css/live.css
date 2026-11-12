@@ -144,27 +144,6 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.live-m3u {
-  align-self: flex-start;
-  margin: 0 0 4px 8px;
-  padding: 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-muted, #a3a3a3);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.live-m3u:hover {
-  border-color: var(--accent, #e5092f);
-  color: var(--text, #fff);
-}
-
 .live-source:hover {
   color: var(--text, #fff);
 }
