@@ -215,10 +215,13 @@ function readM3uUrl() {
     return fromUrl;
   }
   try {
-    return localStorage.getItem(EXTRAS.storageKey) || '';
+    const stored = localStorage.getItem(EXTRAS.storageKey) || '';
+    if (stored) return stored;
   } catch (_) {
-    return '';
+    /* storage disabled */
   }
+  // A box can ship its own list (same origin, no mixed content).
+  return window.CINESTREAM_M3U || '';
 }
 
 function writeM3uUrl(url) {
