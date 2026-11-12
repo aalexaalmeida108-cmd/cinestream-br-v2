@@ -989,14 +989,26 @@ const GLOBO = {
   // A box resolve o manifesto da Globoplay no servidor (a Globo so
   // entrega manifesto para sessao autenticada e so libera CORS de
   // globo.com), entao o canal toca aqui dentro.
-  box: String(
-    new URLSearchParams(location.search).get('box') ||
-    window.CINESTREAM_BOX || ''
-  ).replace(/\/+$/, '')
+  box: ''
 };
 
+// Endereco da box (http://192.168.1.106:8099). Vazio = mesma origem.
+// ?box=URL persiste para as proximas visitas.
+function globoBoxUrl() {
+  const fromUrl = new URLSearchParams(location.search).get('box');
+  if (fromUrl) {
+    try { localStorage.setItem('cineBoxUrl', fromUrl); } catch (_) {}
+    return fromUrl;
+  }
+  try {
+    const stored = localStorage.getItem('cineBoxUrl');
+    if (stored) return stored;
+  } catch (_) {}
+  return window.CINESTREAM_BOX || '';
+}
+
 async function globoManifest(mediaId) {
-  const base = GLOBO.box;
+  const base = globoBoxUrl().replace(/\/+$/, '');
   const url = (base ? base : '') + '/globo/manifest?mediaId=' +
     encodeURIComponent(mediaId);
   const response = await fetch(url, { cache: 'no-store' });
