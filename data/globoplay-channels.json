@@ -74,20 +74,6 @@
    "url": "https://globoplay.globo.com/sportv-2/ao-vivo/7339117/"
   },
   {
-   "mediaId": "7339123",
-   "name": "sportv 3",
-   "slug": "sportv-3",
-   "logo": "https://s2-globo-play.glbimg.com/OWY-ziQwX3hlAbCHmCD1IBOhbm4=/285x285/filters:quality(100)/https://s2-globo-play.glbimg.com/srvCTnIbpAJzJ0o3HSoCmdE_EPM=/filters:fill(transparent,false)/https://i.s3.glbimg.com/v1/AUTH_c3c606ff68e7478091d1ca496f9c5625/internal_photos/bs/2021/9/B/JnrwKrR3uUE3xADMB6NA/logo-de-transmissao-sportv3-a1.png",
-   "category": "Esportes",
-   "free": false,
-   "tier": "SUBSCRIBER",
-   "lock": true,
-   "drm": true,
-   "available_in_location": true,
-   "signal": "spo324ha",
-   "url": "https://globoplay.globo.com/sportv-3/ao-vivo/7339123/"
-  },
-  {
    "mediaId": "8223631",
    "name": "Premiere",
    "slug": "premiere",
@@ -465,5 +451,6 @@
    "signal": "cbnrj24ha",
    "url": "https://globoplay.globo.com/cbn-rj/ao-vivo/9182126/"
   }
- ]
+ ],
+ "total_channels": 32
 }
