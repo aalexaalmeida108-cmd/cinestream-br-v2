@@ -359,3 +359,47 @@ canais e o player toca normal. Use a aba **Extras** com a lista da sua
 operadora (ela tem SPN e Premiere); se a lista trouxer um canal chamado
 `SPN` ou `Premiere`, o cartao deixa de abrir a pagina oficial e passa a
 tocar aqui dentro.
+
+### Tocando os canais da Globo direto no player
+
+A aba **Globoplay** tenta o manifesto na box antes de abrir o site oficial.
+A box resolve tudo no servidor (a Globo so entrega o manifesto assinado
+para uma sessao autenticada, e so libera CORS de globo.com -- no browser
+nao da, no servidor da):
+
+```
+GET  https://api.globoplay.globo.com/...      (nao: o host real e
+     api.globovideos.com/videos/<id>/playlist)      manifesto publico)
+GET  api.globovideos.com/videos/<id>/playlist       -> recursos e paths
+GET  security.video.globo.com/videos/<id>/hash      -> URL assinada (sessao)
+```
+
+Para ativar: na box, uma vez so,
+
+```bash
+# 1) credenciais da sua Conta Globo (ficam so na box, mode 600)
+cat > ~/.config/cinestream/globo.json <<'JSON'
+{"email": "seu@email.com", "senha": "sua-senha"}
+JSON
+chmod 600 ~/.config/cinestream/globo.json
+
+# 2) login oficial (OIDC da Globo, no Chromium da box)
+python3 /home/samba/cineStream/scripts/globo_session.py login
+
+# 3) confere
+python3 /home/samba/cineStream/scripts/globo_session.py status
+```
+
+A partir dai a aba Globoplay toca os canais **da sua conta** direto no
+player: a box assina o manifesto e reescreve os segmentos no proxy local.
+
+**Direito de acesso:** quem tem assinatura ve os canais de assinatura
+(Premiere, sportv, Telecine...); quem nao tem ve so os free (TV Globo,
+GE TV, Futura, CBN, Fast). Isso e do servidor da Globo -- ela nao assina
+o manifesto de um canal que a conta nao cobre, e nao existe caminho no
+player que mude isso.
+
+**URL da box:** a pagina usa a mesma origem por padrao. Se voce abrir o
+site publicado (HTTPS) e apontar para a box (HTTP), o navegador bloqueia
+por mixed content: nesse caso use `?box=https://<tunel-https-para-a-box>`
+(ou abra a pagina da box direto: `http://192.168.1.106:8099/live/live.html`).
