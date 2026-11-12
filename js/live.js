@@ -334,9 +334,26 @@ async function loadExtras() {
   const m3uUrl = readM3uUrl();
   let fromM3u = 0;
   if (m3uUrl) {
-    const response = await fetch(m3uUrl, { cache: 'no-cache' });
-    if (!response.ok) throw new Error(`M3U HTTP ${response.status}`);
-    const entries = parseM3U(await response.text());
+    let entries = [];
+    try {
+      const response = await fetch(m3uUrl, { cache: 'no-cache' });
+      if (!response.ok) throw new Error(`M3U HTTP ${response.status}`);
+      entries = parseM3U(await response.text());
+    } catch (error) {
+      // A list that fails to load must not take the whole tab down: the
+      // official cards still work. A plain HTTP list on an HTTPS page is
+      // blocked by the browser (mixed content) -- say so instead of going
+      // quiet.
+      entries = [];
+      const mixed = location.protocol === 'https:' && m3uUrl.startsWith('http:');
+      showNotice(
+        mixed
+          ? `M3U nao carregou: a lista esta em HTTP e esta pagina em HTTPS. ` +
+            `Use uma URL https:// ou abra a pagina pela box (http://192.168.1.106:8099/live.html).`
+          : `M3U nao carregou: ${error.message}`,
+        'error'
+      );
+    }
     entries.forEach((entry, index) => {
       const key = extraMatchKey(entry.title);
       const existing = channels.find((channel) => channel.match && channel.match === key);
