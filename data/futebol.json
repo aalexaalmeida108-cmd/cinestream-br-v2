@@ -27,6 +27,33 @@
     "note": "YouTube oficial da TNT Sports: Champions League 2026/27, Bundesliga, Serie A. Licenciado e gratuito."
   },
   {
+    "id": "tvglobo",
+    "name": "TV Globo",
+    "group": "Globo grátis",
+    "free": true,
+    "logo": "https://globoplay.globo.com/favicon.ico",
+    "url": "https://globoplay.globo.com/tv-globo/ao-vivo/6120663/",
+    "note": "Sinal da Globo ao vivo, grátis com Conta Globo (regionalizado por estado)."
+  },
+  {
+    "id": "futura",
+    "name": "Futura",
+    "group": "Globo grátis",
+    "free": true,
+    "logo": "https://globoplay.globo.com/favicon.ico",
+    "url": "https://globoplay.globo.com/futura/ao-vivo/7420604/",
+    "note": "Canal Futura ao vivo, grátis com Conta Globo."
+  },
+  {
+    "id": "receitasfast",
+    "name": "Receitas Fast",
+    "group": "Globo grátis",
+    "free": true,
+    "logo": "https://globoplay.globo.com/favicon.ico",
+    "url": "https://globoplay.globo.com/receitas-fast/ao-vivo/11134191/",
+    "note": "Canal de receitas da Globo, grátis com Conta Globo."
+  },
+  {
     "id": "sbt",
     "name": "SBT",
     "group": "Canais abertos",
@@ -69,7 +96,7 @@
     "free": true,
     "logo": "https://tvcultura.com.br/favicon.ico",
     "url": "https://tvcultura.com.br/ao-vivo/",
-    "note": "TV Cultura no ar, gratuito (SBT). transmitting o sinal no ar pela emissora."
+    "note": "TV Cultura no ar, gratuito (transmitindo o sinal da emissora)."
   },
   {
     "id": "tvcamara",
@@ -87,15 +114,15 @@
     "free": true,
     "logo": "https://www.nbr.org.br/favicon.ico",
     "url": "https://www.nbr.org.br/",
-    "note": "TV Brasil — NBR, o canal público federal, gratuito."
+    "note": "NBR (Rede Nacional), o canal público federal, gratuito."
   },
   {
     "id": "tvbrasil",
     "name": "TV Brasil",
     "group": "Canais abertos",
     "free": true,
-    "logo": "https://www.tvbrasil.com.br/favicon.ico",
-    "url": "https://www.tvbrasil.com.br/",
+    "logo": "https://tvbrasil.ebc.com.br/favicon.ico",
+    "url": "https://tvbrasil.ebc.com.br/",
     "note": "TV Brasil, canal público, gratuito."
   },
   {
