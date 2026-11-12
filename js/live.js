@@ -984,8 +984,39 @@ async function genreSet(genre) {
 
 const GLOBO = {
   file: 'data/globoplay-channels.json',
-  info: 'https://security.video.globo.com/videos/'
+  info: 'https://security.video.globo.com/videos/',
+  // Endereco da box (http://192.168.1.106:8099). Vazio = mesma origem.
+  // A box resolve o manifesto da Globoplay no servidor (a Globo so
+  // entrega manifesto para sessao autenticada e so libera CORS de
+  // globo.com), entao o canal toca aqui dentro.
+  box: String(
+    new URLSearchParams(location.search).get('box') ||
+    window.CINESTREAM_BOX || ''
+  ).replace(/\/+$/, '')
 };
+
+async function globoManifest(mediaId) {
+  const base = GLOBO.box;
+  const url = (base ? base : '') + '/globo/manifest?mediaId=' +
+    encodeURIComponent(mediaId);
+  const response = await fetch(url, { cache: 'no-store' });
+  const type = response.headers.get('content-type') || '';
+  if (!response.ok) {
+    let detail = 'HTTP ' + response.status;
+    if (type.indexOf('json') >= 0) {
+      try {
+        const body = await response.json();
+        detail = body.error || detail;
+      } catch (_) {
+        /* keep the status */
+      }
+    }
+    throw new Error(detail);
+  }
+  const text = await response.text();
+  if (text.indexOf('#EXTM3U') !== 0) throw new Error('resposta nao e playlist');
+  return text;
+}
 
 async function globoInfo(mediaId) {
   const response = await fetch(GLOBO.info + mediaId + '/info', {
@@ -1562,9 +1593,27 @@ function cssEscape(value) {
 /* ----------------------------------------------------------------- player */
 
 async function openChannel(channel) {
-  // Some channels are not open streams (SPN, Premiere, every Globoplay
-  // channel): the only legal way to watch them is the broadcaster's own
-  // player, where the viewer's subscription counts. Open it and say so.
+  // Globoplay: se a box tem a sessao da conta do usuario, o canal toca
+  // aqui dentro. Sem sessao (ou sem direito no canal) cai no player
+  // oficial, onde a assinatura do usuario vale.
+  if (channel.globo && !channel.playUrl) {
+    try {
+      channel.playUrl = await globoManifest(channel.id);
+    } catch (error) {
+      channel.state = Object.assign({}, channel.state, { manifestError: error.message });
+      showNotice(
+        `${channel.title}: ${error.message}. Abrindo o player oficial…`,
+        'info'
+      );
+      if (channel.link) {
+        window.open(channel.link, '_blank', 'noopener');
+      }
+      return;
+    }
+  }
+  // Some channels are not open streams (SPN, Premiere): the only legal
+  // way to watch them is the broadcaster's own player, where the viewer's
+  // subscription counts. Open it and say so.
   if (channel.link && !channel.playUrl) {
     showNotice(`Opening ${channel.title} on the official player…`, 'info');
     window.open(channel.link, '_blank', 'noopener');
@@ -1631,6 +1680,7 @@ async function startPlayback(channel) {
   const loadMaster = async (forceBoot = false) => {
     if (state.source === 'local') return channel.playUrl;
     if (state.source === 'extras') return channel.playUrl;
+    if (state.source === 'globo') return channel.playUrl;
     if (state.source === 'pluto') return plutoUrl(channel, forceBoot);
     return `${PLEX.epg}/library/parts/${encodeURIComponent(channel.id)}.m3u8?${tokenQuery(
       state.session || (await resolveSession())
