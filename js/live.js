@@ -118,9 +118,10 @@ const state = {
   localChannels: [],
   plexChannels: [],
   plutoChannels: [],
+  extras: [],
   categories: [],
-  counts: { local: 0, plex: 0, pluto: 0 },
-  loaded: { local: false, plex: false, pluto: false },
+  counts: { local: 0, plex: 0, pluto: 0, extras: 0 },
+  loaded: { local: false, plex: false, pluto: false, extras: false },
   byId: new Map(),
   genreMap: null,
   airings: new Map(),
@@ -171,8 +172,221 @@ async function init() {
   buildSources();
   buildFilters();
   bindEvents();
+  bindM3uButton();
   await boot();
 }
+
+// ---------------------------------------------------------------------------
+// Extras: channels that do not live on Pluto/Plex but can be watched from a
+// source the viewer is entitled to.
+//
+// Two kinds, merged into one tab:
+//   1. data/extra-channels.json — a short, hand-written list of channels that
+//      are only available through an official product (SPN and Premiere are
+//      Globo pay-TV: the signal is not open, only the broadcaster may
+//      authorize a retransmission). Those entries carry a `link` to the
+//      official page and no stream, so clicking them opens the official
+//      player instead of pretending to stream.
+//   2. An M3U the viewer points at (?m3u=URL, or the button next to the
+//      source tabs). Every entry is played inline. When an M3U carries a
+//      channel whose name matches one of the extras (SPN, Premiere), the
+//      card plays inline instead of opening the link — that is the case
+//      where the viewer has a provider (operator TV app, Plex TV, a legal
+//      M3U from the subscription) that already carries the channel.
+//
+// The M3U is fetched by the browser, so it must be CORS-open (the box's
+// /proxy sends Access-Control-Allow-Origin: *) or same-origin.
+// ---------------------------------------------------------------------------
+
+const EXTRAS = {
+  file: 'data/extra-channels.json',
+  m3uParam: 'm3u',
+  storageKey: 'cinestream.m3uUrl'
+};
+
+function readM3uUrl() {
+  const fromUrl = new URLSearchParams(location.search).get(EXTRAS.m3uParam);
+  if (fromUrl) {
+    try {
+      localStorage.setItem(EXTRAS.storageKey, fromUrl);
+    } catch (_) {
+      /* storage disabled */
+    }
+    return fromUrl;
+  }
+  try {
+    return localStorage.getItem(EXTRAS.storageKey) || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function writeM3uUrl(url) {
+  try {
+    if (url) localStorage.setItem(EXTRAS.storageKey, url);
+    else localStorage.removeItem(EXTRAS.storageKey);
+  } catch (_) {
+    /* storage disabled */
+  }
+}
+
+function normalizeKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// "SPN 1", "SPN", "premiere", "Premiere 2" -> the same bucket.
+function extraMatchKey(title) {
+  const key = normalizeKey(title);
+  if (!key) return '';
+  if (key.includes('premiere')) return 'premiere';
+  if (/\bspn\b/.test(key) || key.startsWith('spn')) return 'spn';
+  return key;
+}
+
+function parseM3U(text) {
+  const out = [];
+  const lines = String(text || '').split(/\r?\n/);
+  let pending = null;
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) return;
+    if (line.startsWith('#EXTINF')) {
+      const attrs = line.match(/([a-zA-Z0-9-]+)="([^"]*)"/g) || [];
+      const map = {};
+      attrs.forEach((pair) => {
+        const at = pair.indexOf('="');
+        map[pair.slice(0, at)] = pair.slice(at + 2, -1);
+      });
+      const comma = line.lastIndexOf(',');
+      pending = {
+        title: (comma >= 0 ? line.slice(comma + 1) : map['tvg-name'] || '').trim(),
+        logo: map['tvg-logo'] || map['logo'] || '',
+        group: map['group-title'] || ''
+      };
+      return;
+    }
+    if (line.startsWith('#')) return;
+    if (!pending) return;
+    out.push({
+      title: pending.title || 'Canal',
+      logo: pending.logo,
+      group: pending.group,
+      url: line
+    });
+    pending = null;
+  });
+  return out;
+}
+
+function normalizeExtra(raw, index) {
+  if (!raw || !raw.name) return null;
+  const link = raw.url || raw.link || '';
+  return {
+    id: String(raw.id || `extra-${index}`),
+    epgKey: String(raw.id || `extra-${index}`),
+    slug: String(raw.id || `extra-${index}`),
+    title: String(raw.name),
+    summary: raw.note || raw.summary || '',
+    thumb: raw.logo || '',
+    art: raw.logo || '',
+    language: 'pt',
+    hd: true,
+    streamKey: link,
+    playUrl: raw.streamUrl || raw.playUrl || '',
+    link: raw.type === 'link' ? link : '',
+    match: raw.match || extraMatchKey(raw.name),
+    group: raw.group || 'Extras',
+    categories: raw.group ? [raw.group] : ['Extras'],
+    extra: true
+  };
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, { cache: 'no-cache' });
+  if (!response.ok) throw new Error(`${url} HTTP ${response.status}`);
+  return response.json();
+}
+
+async function loadExtras() {
+  const channels = [];
+  let fromFile = 0;
+  try {
+    const list = await fetchJson(EXTRAS.file);
+    if (Array.isArray(list)) {
+      list.forEach((raw, index) => {
+        const channel = normalizeExtra(raw, index);
+        if (channel) {
+          channels.push(channel);
+          fromFile += 1;
+        }
+      });
+    }
+  } catch (_) {
+    // The extras file is optional; the M3U alone is enough.
+  }
+
+  // The M3U wins over the link card when it carries the same channel.
+  const m3uUrl = readM3uUrl();
+  let fromM3u = 0;
+  if (m3uUrl) {
+    const response = await fetch(m3uUrl, { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`M3U HTTP ${response.status}`);
+    const entries = parseM3U(await response.text());
+    entries.forEach((entry, index) => {
+      const key = extraMatchKey(entry.title);
+      const existing = channels.find((channel) => channel.match && channel.match === key);
+      const playable = {
+        id: `m3u-${index}`,
+        epgKey: `m3u-${index}`,
+        slug: `m3u-${index}`,
+        title: entry.title,
+        summary: entry.group || 'M3U',
+        thumb: entry.logo || '',
+        art: entry.logo || '',
+        language: 'pt',
+        hd: true,
+        streamKey: entry.url,
+        playUrl: entry.url,
+        link: '',
+        match: key,
+        group: entry.group || 'M3U',
+        categories: entry.group ? [entry.group] : ['M3U'],
+        extra: true
+      };
+      if (existing) {
+        Object.assign(existing, playable, { id: existing.id });
+        existing.link = '';
+        fromM3u += 1;
+        return;
+      }
+      channels.push(playable);
+      fromM3u += 1;
+    });
+  }
+
+  if (!channels.length) throw new Error('no extra channels');
+
+  state.extras = channels;
+  state.counts.extras = channels.length;
+  state.loaded.extras = true;
+  buildSources();
+
+  if (state.source !== 'extras') return;
+  state.channels = channels;
+  state.byId = new Map(channels.map((channel) => [channel.id, channel]));
+  state.categories = Array.from(
+    new Set(channels.flatMap((channel) => channel.categories || []))
+  );
+  buildFilters();
+  el.count.textContent = `${channels.length} channels`;
+  render();
+}
+
 
 /* ------------------------------------------------------------------ token */
 
@@ -272,6 +486,15 @@ async function boot(force) {
     state.source = 'plex';
     buildSources();
     showNotice(`Local channels unavailable. ${error.message}.`, 'error');
+  }
+
+  // Extras (SPN, Premiere + whatever the viewer's own M3U carries) load in
+  // the background: the tab must be visible even if the file is missing.
+  try {
+    await loadExtras();
+  } catch (_) {
+    state.loaded.extras = false;
+    state.counts.extras = 0;
   }
 
   // Plex stays available as a second tab; failures do not block Local.
@@ -729,6 +952,7 @@ function buildSources() {
   if (state.loaded.local || state.counts.local) entries.push(['local', 'Local']);
   entries.push(['plex', 'Plex']);
   if (PLUTO.enabled) entries.push(['pluto', 'Pluto TV BR']);
+  if (state.loaded.extras || state.counts.extras) entries.push(['extras', 'Extras']);
 
   el.sources.replaceChildren(
     ...entries.map(([key, label]) => {
@@ -775,6 +999,28 @@ async function switchSource(name) {
     }
     return;
   }
+  if (name === 'extras' && !state.loaded.extras) {
+    state.source = 'extras';
+    state.genre = 'all';
+    state.lang = 'all';
+    state.query = '';
+    el.search.value = '';
+    el.searchClear.hidden = true;
+    state.channels = [];
+    state.byId = new Map();
+    buildSources();
+    buildFilters();
+    el.count.textContent = 'Loading…';
+    el.grid.replaceChildren();
+    showNotice('Loading extra channels…', 'info');
+    try {
+      await loadExtras();
+      hideNotice();
+    } catch (error) {
+      showNotice(`Could not load extra channels. ${error.message}.`, 'error');
+    }
+    return;
+  }
   if (name === 'pluto' && !state.loaded.pluto) {
     state.source = 'pluto';
     state.genre = 'all';
@@ -809,7 +1055,9 @@ async function switchSource(name) {
     ? state.plutoChannels
     : name === 'local'
       ? state.localChannels
-      : state.plexChannels;
+      : name === 'extras'
+        ? state.extras
+        : state.plexChannels;
   state.channels = channels;
   state.byId = new Map(channels.map((channel) => [channel.id, channel]));
   buildSources();
@@ -820,7 +1068,8 @@ async function switchSource(name) {
 function buildFilters() {
   const pluto = state.source === 'pluto';
   const local = state.source === 'local';
-  const list = pluto
+  const extras = state.source === 'extras';
+  const list = pluto || extras
     ? [['all', 'Todos']].concat(state.categories.map((category) => [category, category]))
     : local
       ? [['all', 'All']]
@@ -883,6 +1132,14 @@ async function render() {
   let allowed = null;
   if (state.source === 'local') {
     allowed = null;
+  } else if (state.source === 'extras') {
+    allowed = state.genre === 'all'
+      ? null
+      : new Set(
+        state.channels
+          .filter((channel) => (channel.categories || []).includes(state.genre))
+          .map((channel) => channel.id)
+      );
   } else if (state.source === 'pluto') {
     // The Pluto lineup already carries its own category, so filter locally
     // instead of asking the Plex genre endpoint.
@@ -1148,6 +1405,13 @@ function cssEscape(value) {
 /* ----------------------------------------------------------------- player */
 
 async function openChannel(channel) {
+  // Some channels are not open streams (SPN, Premiere): the only legal way
+  // to watch them is the broadcaster's own player. Open it and say so.
+  if (channel.link && !channel.playUrl) {
+    showNotice(`Opening ${channel.title} on the official player…`, 'info');
+    window.open(channel.link, '_blank', 'noopener');
+    return;
+  }
   state.channel = channel;
   state.program = null;
   state.recoveries = 0;
@@ -1208,6 +1472,7 @@ async function startPlayback(channel) {
   // expired JWT without tearing the player down.
   const loadMaster = async (forceBoot = false) => {
     if (state.source === 'local') return channel.playUrl;
+    if (state.source === 'extras') return channel.playUrl;
     if (state.source === 'pluto') return plutoUrl(channel, forceBoot);
     return `${PLEX.epg}/library/parts/${encodeURIComponent(channel.id)}.m3u8?${tokenQuery(
       state.session || (await resolveSession())
@@ -1491,6 +1756,37 @@ function loadHls() {
 }
 
 /* ------------------------------------------------------------------ wiring */
+
+function bindM3uButton() {
+  const button = document.getElementById('liveM3u');
+  if (!button) return;
+  button.addEventListener('click', async () => {
+    const current = readM3uUrl();
+    const url = window.prompt(
+      'M3U da sua assinatura (operadora, Plex TV ou lista liberada).\nDeixe vazio para remover.',
+      current
+    );
+    if (url === null) return;
+    writeM3uUrl(url.trim());
+    state.loaded.extras = false;
+    state.counts.extras = 0;
+    try {
+      await loadExtras();
+      hideNotice();
+      if (state.source === 'extras') {
+        state.channels = state.extras;
+        state.byId = new Map(state.extras.map((channel) => [channel.id, channel]));
+        state.categories = Array.from(
+          new Set(state.extras.flatMap((channel) => channel.categories || []))
+        );
+        buildFilters();
+        render();
+      }
+    } catch (error) {
+      showNotice(`M3U error. ${error.message}.`, 'error');
+    }
+  });
+}
 
 function bindEvents() {
   el.search.addEventListener('input', () => {

@@ -286,3 +286,43 @@ com o `MediaSource` prefixado renomeado. Os canais do Pluto chegam em H.264
 Na TV, abra `https://aalexaalmeida108-cmd.github.io/cinestream-br-v2/tv.html` e
 fixe a página como inicial ou nos favoritos — não há como instalar PWA nesse
 navegador.
+
+## Live TV: SPN, Premiere e outros canais da assinatura
+
+A aba **Extras** do `live.html` junta duas coisas:
+
+- `data/extra-channels.json` — a lista curta de canais que **não** têm sinal
+  aberto. SPN e Premiere são canais pagos da Globo (Globoplay Premium /
+  Premiere PPV / TV por assinatura): só a emissora pode autorizar a
+  retransmissão do sinal, então o card abre o player oficial em vez de
+  fingir que transmitimos. GE TV (esportes da Globo, grátis com Conta Globo)
+  está no mesmo formato.
+- O **M3U da sua assinatura** — o botão `M3U` ao lado das abas (ou
+  `live.html?m3u=URL`). Toda entrada toca dentro do player. Se a sua lista
+  traz um canal chamado `SPN` ou `Premiere`, o card correspondente deixa de
+  abrir a página oficial e passa a tocar aqui.
+
+### De onde vem a lista
+
+O `server.py` da box serve a lista agregada em `/channels.m3u` (e
+`/api/tv/channels` em JSON), com CORS liberado:
+
+```
+http://192.168.1.106:8099/channels.m3u
+```
+
+As entradas do Pluto vêm do catálogo; os canais da sua assinatura entram pelo
+arquivo `data/extra.m3u` da box. Cada URL é reescrita pelo proxy local, então
+o M3U é CORS-open e o navegador toca qualquer host.
+
+Alternativa já existente na página: a aba **Plex** usa a lineup do
+`epg.provider.plex.tv`. Com o token da sua conta (`live.html?plex=TOKEN`),
+a lineup da sua operadora aparece ali — e é o caminho mais direto para
+assistir SPN/Premiere de quem tem assinatura.
+
+### O que não dá para fazer aqui
+
+Buscar e redistribuir o sinal de SPN/Premiere por conta própria: além de
+não ser legal (Lei 9.610/98, o sinal é da Globo), o Globoplay protege o
+conteúdo com Widevine e o Chromium do TV Box não tem o CDM. O caminho
+honesto é o player oficial ou a lista da sua própria assinatura.
