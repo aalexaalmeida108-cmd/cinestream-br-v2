@@ -1047,7 +1047,10 @@ async function render() {
           .filter((channel) => (channel.categories || []).includes(state.genre))
           .map((channel) => channel.id)
       );
-  } else if (state.source === 'm3u') {
+  } else if (state.source === 'pluto') {
+    // Pluto categories come from the lineup file (channel.category), not
+    // from the Plex genre endpoint — genreSet() would answer with an empty
+    // set and blank the grid.
     allowed = state.genre === 'all'
       ? null
       : new Set(
