@@ -58,10 +58,16 @@ jobs:
           import json, sys
           ok = True
           for name in ("movies", "series", "animes"):
-              payload = json.load(open(f"data/{name}.json", encoding="utf-8"))
-              items = payload.get("items") or []
-              print(f"{name}: {len(items)} items")
-              if not items or payload.get("count") not in (None, len(items)):
+              for suffix in ("", "-top"):
+                  path = f"data/{name}{suffix}.json"
+                  payload = json.load(open(path, encoding="utf-8"))
+                  items = payload.get("items") or []
+                  print(f"{path}: {len(items)} items")
+                  if not items or payload.get("count") not in (None, len(items)):
+                      ok = False
+          for index in range(16):
+              payload = json.load(open(f"data/overviews-{index}.json", encoding="utf-8"))
+              if not isinstance(payload.get("items"), dict):
                   ok = False
           sys.exit(0 if ok else 1)
           PY

@@ -55,21 +55,33 @@ python3 - <<'PY'
 import json, os, sys
 ok = True
 for name in ("movies", "series", "animes"):
-    path = f"data/{name}.json"
+    for suffix in ("", "-top"):
+        path = f"data/{name}{suffix}.json"
+        try:
+            payload = json.load(open(path, encoding="utf-8"))
+        except Exception as exc:
+            print(f"{path}: invalid ({exc})")
+            ok = False
+            continue
+        items = payload.get("items") or []
+        count = payload.get("count")
+        print(f"{path}: {len(items)} items")
+        if not items:
+            print(f"{path}: empty catalog")
+            ok = False
+        if count is not None and count != len(items):
+            print(f"{path}: count={count} but {len(items)} items")
+            ok = False
+for index in range(16):
+    path = f"data/overviews-{index}.json"
     try:
         payload = json.load(open(path, encoding="utf-8"))
     except Exception as exc:
         print(f"{path}: invalid ({exc})")
         ok = False
         continue
-    items = payload.get("items") or []
-    count = payload.get("count")
-    print(f"{path}: {len(items)} items")
-    if not items:
-        print(f"{path}: empty catalog")
-        ok = False
-    if count is not None and count != len(items):
-        print(f"{path}: count={count} but {len(items)} items")
+    if not isinstance(payload.get("items"), dict):
+        print(f"{path}: missing items map")
         ok = False
 if not ok:
     sys.exit(1)
@@ -81,7 +93,7 @@ if [ "$DRY_RUN" = "1" ]; then
   exit 0
 fi
 
-if git diff --quiet -- data; then
+if [ -z "$(git status --porcelain -- data)" ]; then
   log "no catalog changes"
   exit 0
 fi

@@ -104,10 +104,8 @@ button {
   min-height: var(--header-h);
   display: flex;
   align-items: center;
-  background: rgba(11, 13, 16, 0.78);
+  background: rgba(11, 13, 16, 0.94);
   border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
 }
 
 .header-inner {
@@ -494,10 +492,9 @@ button {
   font-weight: 800;
   letter-spacing: 0.02em;
   color: #fff;
-  background: rgba(7, 9, 12, 0.84);
+  background: rgba(7, 9, 12, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 6px;
-  backdrop-filter: blur(6px);
 }
 
 .recent-remove {
@@ -561,7 +558,17 @@ button {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  /* Off-screen cards skip layout and paint; the intrinsic size keeps the
+     scrollbar stable until each card is measured. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
   transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+@media (max-width: 640px) {
+  .card {
+    contain-intrinsic-size: auto 290px;
+  }
 }
 
 .card:hover,
@@ -655,10 +662,9 @@ button {
   font-size: 0.74rem;
   font-weight: 700;
   color: var(--warm);
-  background: rgba(7, 9, 12, 0.78);
+  background: rgba(7, 9, 12, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 7px;
-  backdrop-filter: blur(6px);
 }
 
 .card-rating svg {
@@ -1357,10 +1363,9 @@ body.has-modal {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: #fff;
-  background: rgba(7, 9, 12, 0.82);
+  background: rgba(7, 9, 12, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 6px;
-  backdrop-filter: blur(6px);
 }
 
 .card:hover .card-cat,

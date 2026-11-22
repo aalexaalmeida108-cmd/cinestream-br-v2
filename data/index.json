@@ -1,20 +1,26 @@
 {
-  "generated_at": "2026-11-16T15:52:45+00:00",
+  "generated_at": "2026-11-22T13:03:22+00:00",
   "categories": {
     "movie": {
       "file": "movies.json",
       "count": 19143,
-      "bytes": 7791119
+      "bytes": 3265449,
+      "top_file": "movies-top.json",
+      "top_count": 180
     },
     "series": {
       "file": "series.json",
       "count": 4646,
-      "bytes": 1753542
+      "bytes": 688767,
+      "top_file": "series-top.json",
+      "top_count": 180
     },
     "anime": {
       "file": "animes.json",
       "count": 2394,
-      "bytes": 987701
+      "bytes": 385230,
+      "top_file": "animes-top.json",
+      "top_count": 180
     }
   }
 }

@@ -9,6 +9,10 @@ Output:
     data/movies.json
     data/series.json
     data/animes.json
+    data/movies-top.json
+    data/series-top.json
+    data/animes-top.json
+    data/overviews-0.json .. data/overviews-15.json
     data/index.json
 
 Raw responses are cached under .cache/embedmovies/ so a rerun only downloads
@@ -43,6 +47,10 @@ OUTPUTS = {
     "tv": ("series.json", "series"),
     "anime": ("animes.json", "anime"),
 }
+
+# First-paint slice size and the number of player overview shards.
+TOP_COUNT = 180
+OVERVIEW_SHARDS = 16
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
@@ -334,6 +342,7 @@ def main():
 
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     manifest = {"generated_at": generated_at, "categories": {}}
+    overviews = {}
 
     for kind in kinds:
         items = catalog[kind]
@@ -341,6 +350,16 @@ def main():
                                      -(item.get("r") or 0),
                                      -(item.get("y") or 0),
                                      item.get("t", "").lower()))
+        # Backdrops are never rendered by the catalog, and overviews are only
+        # read by the watch page. Keeping both in the grid payload cost ~55%
+        # of every catalog download, so they move out here: backdrops dropped,
+        # overviews split into small shards the player fetches on demand.
+        for item in items:
+            overview = item.pop("o", None)
+            item.pop("b", None)
+            if overview and item.get("tm"):
+                overviews[str(item["tm"])] = overview
+
         filename, label = OUTPUTS[kind]
         path = os.path.join(DATA_DIR, filename)
         temporary = path + ".tmp"
@@ -353,13 +372,55 @@ def main():
         with open(temporary, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
         os.replace(temporary, path)
+
+        # The first screen renders from this small prefix while the full file
+        # streams in behind it. It mirrors the head of the sorted catalog, so
+        # the full load can replace it without reordering anything.
+        top_path = os.path.join(DATA_DIR, filename.replace(".json", "-top.json"))
+        top_payload = {
+            "generated_at": generated_at,
+            "category": label,
+            "count": min(TOP_COUNT, len(items)),
+            "items": items[:TOP_COUNT],
+        }
+        with open(top_path + ".tmp", "w", encoding="utf-8") as handle:
+            json.dump(top_payload, handle, ensure_ascii=False,
+                      separators=(",", ":"))
+        os.replace(top_path + ".tmp", top_path)
+
         size_mb = os.path.getsize(path) / (1024 * 1024)
         manifest["categories"][label] = {
             "file": filename,
             "count": len(items),
             "bytes": os.path.getsize(path),
+            "top_file": os.path.basename(top_path),
+            "top_count": top_payload["count"],
         }
-        log("Wrote {} ({} items, {:.1f} MB)".format(filename, len(items), size_mb))
+        log("Wrote {} ({} items, {:.1f} MB, first {} in {})".format(
+            filename, len(items), size_mb, top_payload["count"],
+            os.path.basename(top_path)))
+
+    shards = {index: {} for index in range(OVERVIEW_SHARDS)}
+    for key, text in overviews.items():
+        shards[int(key) % OVERVIEW_SHARDS][key] = text
+    for index, shard in shards.items():
+        shard_path = os.path.join(DATA_DIR, "overviews-{}.json".format(index))
+        if args.only and os.path.exists(shard_path):
+            # A partial refresh only covers some categories; keep the other
+            # categories' overviews instead of dropping them.
+            try:
+                with open(shard_path, "r", encoding="utf-8") as handle:
+                    existing = json.load(handle).get("items") or {}
+            except (OSError, ValueError):
+                existing = {}
+            existing.update(shard)
+            shard = existing
+        with open(shard_path + ".tmp", "w", encoding="utf-8") as handle:
+            json.dump({"generated_at": generated_at, "items": shard}, handle,
+                      ensure_ascii=False, separators=(",", ":"))
+        os.replace(shard_path + ".tmp", shard_path)
+    log("Wrote {} overview shards ({} titles)".format(
+        OVERVIEW_SHARDS, len(overviews)))
 
     if not args.only:
         index_path = os.path.join(DATA_DIR, "index.json")

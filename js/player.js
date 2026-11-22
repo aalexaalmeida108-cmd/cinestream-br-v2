@@ -8,6 +8,7 @@ const WATCHPLAY_ORIGIN = 'https://v2.watchplay.shop';
 const SOURCE_PREFS_KEY = 'cinestream:source';
 const AUDIO_PREFS_KEY = 'cinestream:audio';
 const EPISODE_INDEX_URL = 'data/episodes.json';
+const OVERVIEW_SHARDS = 16;
 // Seasons known to answer with at least one server on the default source.
 // Built incrementally; a title missing from the map is simply "unknown" and
 // keeps the plain season 1 default.
@@ -52,6 +53,7 @@ let availability = null;
 let seasonNotice = '';
 let sourceIndex = 0;
 let audioMode = 'original';
+let overviewRequested = false;
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -162,6 +164,7 @@ function applyConfig() {
   updateSourceTabs();
   updateMeta();
   updateSynopsis();
+  loadOverview();
 
   if (config.type !== 'movie' && knownSeasons().length) {
     setupEpisodeControls();
@@ -694,6 +697,26 @@ function updateMeta() {
       el.meta.appendChild(span);
     }
   });
+}
+
+// The catalog no longer carries overviews: they live in 16 small shards and
+// are fetched only when a watch page opens.
+async function loadOverview() {
+  if (config.overview || !config.tmdb || overviewRequested) return;
+  overviewRequested = true;
+  try {
+    const shard = Number(config.tmdb) % OVERVIEW_SHARDS;
+    const response = await fetch('data/overviews-' + shard + '.json',
+      { cache: 'force-cache' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const text = payload && payload.items && payload.items[String(config.tmdb)];
+    if (!text) return;
+    config.overview = text;
+    updateSynopsis();
+  } catch (error) {
+    // Synopsis is optional; playback never waits for it.
+  }
 }
 
 function updateSynopsis() {

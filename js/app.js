@@ -27,6 +27,7 @@ const CATEGORIES = {
 
 const INDEX_KEYS = { movies: 'movie', series: 'series', animes: 'anime' };
 const PAGE_SIZE = 60;
+const TOP_SUFFIX = '-top.json';
 const PLACEHOLDER = 'assets/placeholder.svg';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p/w342';
 const GENRE_BITS = { acao: 1, aventura: 2, terror: 4, comedia: 8, drama: 16 };
@@ -53,7 +54,14 @@ const state = {
   visible: PAGE_SIZE,
   rendered: 0,
   cache: new Map(),
+  full: new Set(),
+  pending: new Map(),
+  version: 0,
+  view: null,
+  genreMask: new Map(),
+  searchWarm: new Set(),
   genres: null,
+  genresFailed: false,
   episodes: null,
   index: null,
   requestId: 0
@@ -258,7 +266,7 @@ function onTabKeydown(event) {
 
 async function switchCategory(key, options = {}) {
   if (!CATEGORIES[key]) return;
-  if (key === state.category && state.cache.has(key) && !state.query && options.query === undefined) return;
+  if (key === state.category && state.full.has(key) && !state.query && options.query === undefined) return;
 
   state.category = key;
   state.query = options.query || '';
@@ -285,9 +293,26 @@ async function switchCategory(key, options = {}) {
   const requestId = ++state.requestId;
   const cached = state.cache.get(key);
 
+  // The complete file always downloads in the background. Only the first
+  // screen waits for the small top slice, so a slow connection paints cards
+  // in a fraction of the time the full catalog used to take.
+  const fullLoad = loadCategory(key).then((items) => {
+    if (state.category !== key) return items;
+    const exact = state.sort !== 'popular' || state.genre !== 'all' ||
+      Boolean(state.query) || state.searchAll;
+    // If the top slice has not painted yet the grid still holds skeletons,
+    // so the first full render must reset it.
+    render(state.rendered === 0 || exact);
+    return items;
+  }).catch((error) => {
+    if (state.category !== key) return;
+    if (!state.cache.has(key)) showLoadError(error);
+    else render(true);
+    return null;
+  });
+
   if (cached) {
     render(true);
-    updateGenreAvailability();
     return;
   }
 
@@ -295,42 +320,118 @@ async function switchCategory(key, options = {}) {
   setResultCount('Loading ' + CATEGORIES[key].label.toLowerCase() + '...');
 
   try {
-    const items = await loadCategory(key);
+    const top = await loadTop(key);
     if (requestId !== state.requestId) return;
+    if (!state.full.has(key)) {
+      state.cache.set(key, top);
+      state.version += 1;
+      state.view = null;
+    }
     if (state.searchAll && state.query) return; // the all-categories render owns the grid
     render(true);
   } catch (error) {
+    await fullLoad;
     if (requestId !== state.requestId) return;
-    showLoadError(error);
+    if (state.cache.has(key)) render(true);
+    else showLoadError(error);
   }
 }
 
-async function loadCategory(key) {
-  if (state.cache.has(key)) return state.cache.get(key);
+function topFile(key) {
+  return CATEGORIES[key].file.replace(/\.json$/, TOP_SUFFIX);
+}
 
-  const response = await fetch(CATEGORIES[key].file, { cache: 'no-cache' });
+async function loadTop(key) {
+  const response = await fetch(topFile(key), { cache: 'default', priority: 'high' });
   if (!response.ok) {
-    throw new Error('HTTP ' + response.status + ' while loading ' + CATEGORIES[key].file);
+    throw new Error('HTTP ' + response.status + ' while loading ' + topFile(key));
   }
-
   const payload = await response.json();
   if (!payload || !Array.isArray(payload.items)) {
-    throw new Error('Malformed catalog file: ' + CATEGORIES[key].file);
+    throw new Error('Malformed top slice: ' + topFile(key));
   }
-
   const items = payload.items.map(prepareItem);
   items.forEach((item) => { item._cat = key; });
-  state.cache.set(key, items);
   return items;
 }
 
+function loadCategory(key) {
+  if (state.full.has(key)) return Promise.resolve(state.cache.get(key));
+  if (state.pending.has(key)) return state.pending.get(key);
+
+  const promise = (async () => {
+    const response = await fetch(CATEGORIES[key].file, { cache: 'default', priority: 'low' });
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status + ' while loading ' + CATEGORIES[key].file);
+    }
+
+    const payload = await response.json();
+    if (!payload || !Array.isArray(payload.items)) {
+      throw new Error('Malformed catalog file: ' + CATEGORIES[key].file);
+    }
+
+    const items = payload.items.map(prepareItem);
+    items.forEach((item) => { item._cat = key; });
+    state.cache.set(key, items);
+    state.full.add(key);
+    state.version += 1;
+    state.view = null;
+    state.genreMask.delete(key);
+    state.searchWarm.delete(key);
+    if (state.category === key) warmSearchIndex(key);
+    return items;
+  })();
+
+  state.pending.set(key, promise);
+  promise.then(
+    () => { if (state.pending.get(key) === promise) state.pending.delete(key); },
+    () => { if (state.pending.get(key) === promise) state.pending.delete(key); }
+  );
+  return promise;
+}
+
 function prepareItem(item) {
-  item._search = normalize([item.t, item.tp].filter(Boolean).join(' '));
   const rating = Number(item.r) || 0;
   const votes = Number(item.v) || 0;
   // Bayesian average keeps a single 10/10 vote from topping the chart.
   item._score = (rating * votes + 6.5 * 50) / (votes + 50);
   return item;
+}
+
+// Search fields are built in idle chunks after the catalog lands. Preparing
+// 19k normalized titles inside the click that starts a search is what made
+// the first keystroke stutter on phones.
+function prepareSearch(item) {
+  if (item._search !== undefined) return;
+  item._t = normalize(item.t);
+  item._tp = item.tp ? normalize(item.tp) : '';
+  item._search = item._tp ? item._t + ' ' + item._tp : item._t;
+}
+
+function ensureSearchIndex(items) {
+  for (const item of items) prepareSearch(item);
+}
+
+function scheduleIdle(fn) {
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(fn, { timeout: 2500 });
+  } else {
+    window.setTimeout(fn, 120);
+  }
+}
+
+function warmSearchIndex(key) {
+  const items = state.cache.get(key);
+  if (!items || state.searchWarm.has(key)) return;
+  state.searchWarm.add(key);
+  let index = 0;
+  const chunk = 400;
+  const step = () => {
+    const end = Math.min(index + chunk, items.length);
+    for (; index < end; index += 1) prepareSearch(items[index]);
+    if (index < items.length) scheduleIdle(step);
+  };
+  scheduleIdle(step);
 }
 
 function normalize(value) {
@@ -367,13 +468,14 @@ function currentItems() {
   const query = normalize(state.query);
   if (!query) return items;
 
+  ensureSearchIndex(items);
   const tokens = query.split(' ').filter(Boolean);
   return items.filter((item) => tokens.every((token) => item._search.includes(token)));
 }
 
 function relevance(item, tokens) {
-  const original = normalize(item.t);
-  const translated = normalize(item.tp);
+  const original = item._t || normalize(item.t);
+  const translated = item._tp || '';
   let score = 0;
   for (const token of tokens) {
     if (original === token || translated === token) score += 10;
@@ -385,8 +487,24 @@ function relevance(item, tokens) {
   return score;
 }
 
+function viewKey() {
+  return [state.category, state.query, state.sort, state.genre,
+    state.searchAll ? 1 : 0, state.version].join('\u0000');
+}
+
+function computeView() {
+  const key = viewKey();
+  if (state.view && state.view.key === key) return state.view.items;
+  const items = sortedItems(currentItems());
+  state.view = { key, items };
+  return items;
+}
+
 function sortedItems(items) {
   const list = items.slice();
+  // The catalog files are already ordered by popularity, so the default view
+  // can skip a 19k-item sort entirely. Every other mode still sorts.
+  if (state.sort === 'popular' && !state.query) return list;
   const tokens = state.query ? normalize(state.query).split(' ').filter(Boolean) : [];
   const rank = tokens.length
     ? new Map(list.map((item) => [item, relevance(item, tokens)]))
@@ -415,7 +533,7 @@ function sortedItems(items) {
 }
 
 function render(reset, providedItems) {
-  const items = sortedItems(providedItems || currentItems());
+  const items = providedItems || computeView();
   const total = items.length;
 
   el.grid.setAttribute('aria-busy', 'false');
@@ -426,6 +544,13 @@ function render(reset, providedItems) {
   }
 
   if (!total) {
+    // A saved genre cannot be filtered until genres.json lands. Keep the
+    // skeletons up instead of flashing "No titles available" for a second.
+    if (state.genre !== 'all' && !state.genres && !state.genresFailed) {
+      showSkeletons();
+      setResultCount('Loading ' + CATEGORIES[state.category].label.toLowerCase() + '...');
+      return;
+    }
     el.grid.replaceChildren(emptyState());
     setResultCount(state.query
       ? '0 results for \u201c' + state.query + '\u201d'
@@ -447,14 +572,15 @@ function render(reset, providedItems) {
   }
 
   setResultCount(summaryText(total));
-  const hasMore = state.rendered < total;
+  const complete = state.searchAll || state.full.has(state.category);
+  const hasMore = state.rendered < total || !complete;
   el.loadMore.hidden = !hasMore;
   el.endNote.hidden = hasMore || total <= PAGE_SIZE;
   updateGenreAvailability();
 }
 
 function loadMore() {
-  const items = currentItems();
+  const items = computeView();
   if (state.rendered >= items.length) return;
   state.visible += PAGE_SIZE;
   render(false, items);
@@ -469,6 +595,11 @@ function summaryText(total) {
     const scope = state.searchAll ? ' across all categories' : '';
     return numberFormat.format(total) + (total === 1 ? ' result for ' : ' results for ') +
       '\u201c' + state.query + '\u201d' + scope;
+  }
+  if (!state.full.has(state.category) && state.genre === 'all' && state.index &&
+      state.index.categories) {
+    const entry = state.index.categories[INDEX_KEYS[state.category]];
+    if (entry && entry.count) total = entry.count;
   }
   const meta = CATEGORIES[state.category];
   if (state.genre === 'lancamentos') {
@@ -667,8 +798,8 @@ function cardTitle(item) {
   if (!state.query || !item.tp) return item.t;
   const tokens = normalize(state.query).split(' ').filter(Boolean);
   if (!tokens.length) return item.t;
-  const translated = normalize(item.tp);
-  const original = normalize(item.t);
+  const translated = item._tp || normalize(item.tp);
+  const original = item._t || normalize(item.t);
   const translatedMatch = tokens.every((token) => translated.includes(token));
   const originalMatch = tokens.every((token) => original.includes(token));
   // When the query only matches the localized title, show that title so the
@@ -686,7 +817,6 @@ function playerHref(item, title) {
   if (item.s) params.set('s', item.s);
   if (item.p) params.set('p', item.p);
   if (item.r) params.set('r', item.r);
-  if (item.o) params.set('o', item.o);
   return 'player.html?' + params.toString();
 }
 
@@ -789,7 +919,7 @@ function updateTabCounts() {
 
 async function loadIndex() {
   try {
-    const response = await fetch('data/index.json', { cache: 'no-cache' });
+    const response = await fetch('data/index.json', { cache: 'default' });
     if (!response.ok) return;
     state.index = await response.json();
     updateTabCounts();
@@ -858,12 +988,26 @@ function applySearch(value) {
   }
 
   if (!state.cache.has(state.category)) return;
+
+  if (state.query && !state.full.has(state.category)) {
+    // The top slice cannot prove a title is absent; wait for the full file
+    // before reporting the result set.
+    const key = state.category;
+    const query = state.query;
+    loadCategory(key).then(() => {
+      if (state.category === key && state.query === query) render(true);
+    }).catch(() => {
+      if (state.category === key && state.query === query) render(true);
+    });
+    return;
+  }
+
   render(true);
 }
 
 // Loads every catalog and shows matches across movies, series and anime.
 // Only used when the user asks for it (or a scoped search finds nothing),
-// so the extra ~3 MB of JSON is not paid on a normal visit.
+// so the extra JSON is not paid on a normal visit.
 async function renderSearchAll() {
   if (!state.query) return;
   state.searchAll = true;
@@ -871,10 +1015,12 @@ async function renderSearchAll() {
   state.requestId += 1;
   setResultCount('Searching all categories...');
 
-  try {
-    await Promise.all(Object.keys(CATEGORIES).map((key) => loadCategory(key)));
-  } catch (error) {
-    showLoadError(error);
+  const results = await Promise.allSettled(
+    Object.keys(CATEGORIES).map((key) => loadCategory(key))
+  );
+  if (!state.cache.size) {
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure) showLoadError(failure.reason);
     return;
   }
 
@@ -927,17 +1073,33 @@ function seasonCount(item) {
 
 async function loadGenres() {
   try {
-    const response = await fetch('data/genres.json', { cache: 'no-cache' });
-    if (!response.ok) return;
+    const response = await fetch('data/genres.json', { cache: 'default' });
+    if (!response.ok) return markGenresUnavailable();
     const payload = await response.json();
-    if (!payload || !payload.items || typeof payload.items !== 'object') return;
-    if (!Object.keys(payload.items).length) return;
+    if (!payload || !payload.items || typeof payload.items !== 'object') {
+      return markGenresUnavailable();
+    }
+    if (!Object.keys(payload.items).length) return markGenresUnavailable();
     state.genres = payload.items;
+    state.genreMask.clear();
+    state.version += 1;
+    state.view = null;
     if (el.genreBar) el.genreBar.hidden = false;
     updateGenreAvailability();
+    // A genre can be selected from the URL before genres.json lands; the
+    // first render could not filter without it, so redo that view now.
+    if (state.genre !== 'all' && state.cache.has(state.category)) render(true);
   } catch (error) {
-    // Genre filters are optional; the catalog still works without them.
+    markGenresUnavailable();
   }
+}
+
+// Without the genre map a saved filter can never resolve. Stop waiting on
+// skeletons and let the empty state explain the result instead.
+function markGenresUnavailable() {
+  if (state.genresFailed) return;
+  state.genresFailed = true;
+  if (state.genre !== 'all' && state.cache.has(state.category)) render(true);
 }
 
 function updateGenres() {
@@ -948,12 +1110,34 @@ function updateGenres() {
   });
 }
 
+function genreMaskFor(key) {
+  if (state.genreMask.has(key)) return state.genreMask.get(key);
+  const items = state.cache.get(key);
+  if (!items) return null;
+  const tags = state.genres || {};
+  let mask = 0;
+  let hasNew = false;
+  for (const item of items) {
+    mask |= tags[String(item.i)] || 0;
+    if (!hasNew && (Number(item.y) || 0) >= NEW_RELEASE_YEAR) hasNew = true;
+  }
+  const info = { mask, hasNew };
+  state.genreMask.set(key, info);
+  return info;
+}
+
 // Hides genre chips that have no titles in the current catalog instead of
 // leaving five filters that always return an empty grid.
 function updateGenreAvailability() {
   if (!state.genres || !el.genreChips) return;
-  const items = state.cache.get(state.category);
-  if (!items) return;
+  if (!state.cache.get(state.category)) return;
+  if (!state.full.has(state.category)) {
+    // The top slice is only a popularity sample; do not hide genres from it.
+    el.genreChips.forEach((chip) => { chip.hidden = false; });
+    return;
+  }
+  const info = genreMaskFor(state.category);
+  if (!info) return;
 
   el.genreChips.forEach((chip) => {
     const genre = chip.dataset.genre;
@@ -961,14 +1145,9 @@ function updateGenreAvailability() {
       chip.hidden = false;
       return;
     }
-
-    let hasItems = false;
-    if (genre === 'lancamentos') {
-      hasItems = items.some((item) => (Number(item.y) || 0) >= NEW_RELEASE_YEAR);
-    } else {
-      const bit = GENRE_BITS[genre] || 0;
-      hasItems = items.some((item) => ((state.genres[String(item.i)] || 0) & bit) !== 0);
-    }
+    const hasItems = genre === 'lancamentos'
+      ? info.hasNew
+      : (info.mask & (GENRE_BITS[genre] || 0)) !== 0;
     chip.hidden = !hasItems;
   });
 }
@@ -987,6 +1166,19 @@ function setGenre(value) {
   savePrefs();
   syncUrl();
   if (!state.cache.has(state.category)) return;
+
+  if (!state.full.has(state.category)) {
+    // Filtering the top slice is fine for feedback, but the real result set
+    // needs the whole catalog; swap it in as soon as the file arrives.
+    render(true);
+    const key = state.category;
+    const genre = state.genre;
+    loadCategory(key).then(() => {
+      if (state.category === key && state.genre === genre) render(true);
+    }).catch(() => {});
+    return;
+  }
+
   render(true);
 }
 
