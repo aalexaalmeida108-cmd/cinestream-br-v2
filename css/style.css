@@ -1475,3 +1475,44 @@ body.has-modal {
   justify-content: flex-end;
   margin-top: 18px;
 }
+
+
+/* Runtime performance tiers, set by js/perf-guard.js. */
+:root[data-perf="lite"] .card,
+:root[data-perf="lite"] .card-poster img,
+:root[data-perf="lite"] .card-play,
+:root[data-perf="lite"] .card-poster::after,
+:root[data-perf="lite"] .search-input,
+:root[data-perf="lite"] .chip,
+:root[data-perf="lite"] .tab {
+  transition: none;
+}
+
+:root[data-perf="lite"] .card:hover,
+:root[data-perf="lite"] .card:focus-visible {
+  transform: none;
+}
+
+:root[data-perf="lite"] .card:hover .card-poster img {
+  transform: none;
+  filter: none;
+}
+
+:root[data-perf="minimal"] .skeleton .card-poster,
+:root[data-perf="minimal"] .skeleton .sk-line {
+  animation: none;
+  background: #1a222d;
+}
+
+:root[data-perf="minimal"] *,
+:root[data-perf="minimal"] *::before,
+:root[data-perf="minimal"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+:root[data-perf="minimal"] .pix-modal,
+:root[data-perf="minimal"] .install-dialog {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

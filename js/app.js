@@ -64,10 +64,15 @@ const state = {
   genresFailed: false,
   episodes: null,
   index: null,
-  requestId: 0
+  requestId: 0,
+  autoLoadPaused: false
 };
 
 const el = {};
+
+function guardMeasure(label, fn) {
+  return window.PerfGuard ? window.PerfGuard.measure(label, fn) : fn();
+}
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -89,6 +94,15 @@ function init() {
   el.recentClear = document.getElementById('recentClear');
 
   bindEvents();
+
+  document.addEventListener('perfchange', (event) => {
+    // After a real freeze, stop the grid from auto-loading more cards while
+    // the reader scrolls; the button still works. If the guard recovers a
+    // tier, scrolling may grow the grid again.
+    if (event.detail) state.autoLoadPaused = event.detail.tier >= 2;
+  });
+  if (window.PerfGuard && window.PerfGuard.tier >= 2) state.autoLoadPaused = true;
+
   loadIndex();
   loadGenres();
   loadEpisodes();
@@ -239,7 +253,7 @@ function bindEvents() {
 
   if ('IntersectionObserver' in window) {
     const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
+      if (entries.some((entry) => entry.isIntersecting) && !state.autoLoadPaused) {
         loadMore();
       }
     }, { rootMargin: '700px 0px' });
@@ -350,7 +364,7 @@ async function loadTop(key) {
   if (!payload || !Array.isArray(payload.items)) {
     throw new Error('Malformed top slice: ' + topFile(key));
   }
-  const items = payload.items.map(prepareItem);
+  const items = guardMeasure('prepare', () => payload.items.map(prepareItem));
   items.forEach((item) => { item._cat = key; });
   return items;
 }
@@ -370,7 +384,7 @@ function loadCategory(key) {
       throw new Error('Malformed catalog file: ' + CATEGORIES[key].file);
     }
 
-    const items = payload.items.map(prepareItem);
+    const items = guardMeasure('prepare', () => payload.items.map(prepareItem));
     items.forEach((item) => { item._cat = key; });
     state.cache.set(key, items);
     state.full.add(key);
@@ -425,7 +439,7 @@ function warmSearchIndex(key) {
   if (!items || state.searchWarm.has(key)) return;
   state.searchWarm.add(key);
   let index = 0;
-  const chunk = 400;
+  const chunk = window.PerfGuard && window.PerfGuard.tier > 0 ? 200 : 400;
   const step = () => {
     const end = Math.min(index + chunk, items.length);
     for (; index < end; index += 1) prepareSearch(items[index]);
@@ -528,7 +542,8 @@ function sortedItems(items) {
 
   // While searching, exact and prefix matches come first; the chosen sort
   // breaks ties instead of scattering the best match down the grid.
-  list.sort((a, b) => (rank ? (rank.get(b) - rank.get(a)) : 0) || byBase(a, b));
+  const compare = (a, b) => (rank ? (rank.get(b) - rank.get(a)) : 0) || byBase(a, b);
+  guardMeasure('sort', () => list.sort(compare));
   return list;
 }
 
@@ -563,12 +578,15 @@ function render(reset, providedItems) {
 
   const end = Math.min(state.visible, total);
   if (state.rendered < end) {
-    const fragment = document.createDocumentFragment();
-    for (let index = state.rendered; index < end; index += 1) {
-      fragment.appendChild(createCard(items[index]));
-    }
-    el.grid.appendChild(fragment);
-    state.rendered = end;
+    const from = state.rendered;
+    guardMeasure('render', () => {
+      const fragment = document.createDocumentFragment();
+      for (let index = from; index < end; index += 1) {
+        fragment.appendChild(createCard(items[index]));
+      }
+      el.grid.appendChild(fragment);
+      state.rendered = end;
+    });
   }
 
   setResultCount(summaryText(total));
