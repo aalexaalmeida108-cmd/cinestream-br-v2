@@ -40,6 +40,7 @@ const GENRE_LABELS = {
 };
 const NEW_RELEASE_YEAR = 2025;
 const PREFS_KEY = 'cinestream:prefs';
+const SCROLL_KEY = 'cinestream:catalog-scroll';
 const SORTS = ['popular', 'rating', 'newest', 'title'];
 const CATEGORY_LABELS = { movies: 'Movie', series: 'Series', animes: 'Anime' };
 const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
@@ -65,7 +66,8 @@ const state = {
   episodes: null,
   index: null,
   requestId: 0,
-  autoLoadPaused: false
+  autoLoadPaused: false,
+  pendingScrollY: null
 };
 
 const el = {};
@@ -77,6 +79,8 @@ function guardMeasure(label, fn) {
 document.addEventListener('DOMContentLoaded', init);
 
 function init() {
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
   el.grid = document.getElementById('grid');
   el.notice = document.getElementById('notice');
   el.resultCount = document.getElementById('resultCount');
@@ -129,8 +133,10 @@ function init() {
   switchCategory(initial, { updateHash: false, genre, query });
 
   if (url.all && query) {
-    renderSearchAll();
+    renderSearchAll().finally(restoreCatalogScroll);
+    return;
   }
+  restoreCatalogScroll();
 }
 
 function readUrlState() {
@@ -180,6 +186,73 @@ function syncUrl() {
   if (state.sort !== 'popular') params.set('sort', state.sort);
   const search = params.toString();
   history.replaceState(null, '', (search ? '?' + search : '') + '#' + state.category);
+}
+
+function catalogScrollKey() {
+  return state.category + '|' + state.genre + '|' + state.sort + '|' + (state.searchAll ? '1' : '0') + '|' + state.query;
+}
+
+function saveCatalogScroll() {
+  try {
+    const payload = {
+      key: catalogScrollKey(),
+      y: Math.max(0, Math.round(window.scrollY || window.pageYOffset || 0)),
+      visible: state.visible,
+      at: Date.now()
+    };
+    window.sessionStorage.setItem(SCROLL_KEY, JSON.stringify(payload));
+  } catch (error) {
+    // Private mode; scroll restore is a convenience.
+  }
+}
+
+function readCatalogScroll() {
+  try {
+    const raw = window.sessionStorage.getItem(SCROLL_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (parsed.key !== catalogScrollKey()) return null;
+    if (Date.now() - Number(parsed.at || 0) > 30 * 60 * 1000) return null;
+    return parsed;
+  } catch (error) {
+    return null;
+  }
+}
+
+function restoreCatalogScroll() {
+  const saved = readCatalogScroll();
+  if (!saved) return;
+  state.pendingScrollRestore = {
+    y: Math.max(0, Number(saved.y) || 0),
+    visible: Math.max(PAGE_SIZE, Number(saved.visible) || PAGE_SIZE),
+    until: Date.now() + 10000
+  };
+  applyPendingScrollRestore();
+}
+
+function applyPendingScrollRestore() {
+  const pending = state.pendingScrollRestore;
+  if (!pending || state._restoringScroll) return;
+  if (Date.now() > pending.until) {
+    state.pendingScrollRestore = null;
+    return;
+  }
+  state._restoringScroll = true;
+  try {
+    if (state.visible < pending.visible) state.visible = pending.visible;
+    render(false);
+    const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const y = Math.min(pending.y, maxY);
+    if (maxY > 0 || pending.y === 0) window.scrollTo(0, y);
+    if (Math.abs((window.scrollY || window.pageYOffset || 0) - y) < 2 && (maxY >= y || pending.y === 0)) {
+      state.pendingScrollRestore = null;
+      return;
+    }
+  } finally {
+    state._restoringScroll = false;
+  }
+  window.requestAnimationFrame(applyPendingScrollRestore);
 }
 
 function bindEvents() {
@@ -246,7 +319,10 @@ function bindEvents() {
   window.addEventListener('storage', (event) => {
     if (event.key === CineStreamRecent.STORAGE_KEY) renderRecent();
   });
-  window.addEventListener('pageshow', renderRecent);
+  window.addEventListener('pageshow', (event) => {
+    renderRecent();
+    if (event.persisted) restoreCatalogScroll();
+  });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) renderRecent();
   });
@@ -288,6 +364,7 @@ async function switchCategory(key, options = {}) {
   state.genre = options.genre !== undefined ? (validGenre(options.genre) || 'all') : 'all';
   state.visible = PAGE_SIZE;
   state.rendered = 0;
+  state.pendingScrollRestore = null;
 
   el.searchInput.value = state.query;
   el.searchInput.placeholder = CATEGORIES[key].placeholder;
@@ -330,8 +407,12 @@ async function switchCategory(key, options = {}) {
     return;
   }
 
-  showSkeletons();
-  setResultCount('Loading ' + CATEGORIES[key].label.toLowerCase() + '...');
+  if (state.pendingScrollRestore) {
+    setResultCount('Loading ' + CATEGORIES[key].label.toLowerCase() + '...');
+  } else {
+    showSkeletons();
+    setResultCount('Loading ' + CATEGORIES[key].label.toLowerCase() + '...');
+  }
 
   try {
     const top = await loadTop(key);
@@ -595,6 +676,8 @@ function render(reset, providedItems) {
   el.loadMore.hidden = !hasMore;
   el.endNote.hidden = hasMore || total <= PAGE_SIZE;
   updateGenreAvailability();
+
+  if (state.pendingScrollRestore) applyPendingScrollRestore();
 }
 
 function loadMore() {
@@ -638,6 +721,11 @@ function createCard(item, options = {}) {
   card.setAttribute('aria-label', (options.recent ? 'Continue watching ' : 'Watch ') +
     displayTitle + (item.y ? ' (' + item.y + ')' : ''));
   if (displayTitle !== item.t) card.title = item.t;
+  card.addEventListener('click', (event) => {
+    if (event.defaultPrevented || event.button !== 0 ||
+        event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    saveCatalogScroll();
+  });
 
   const poster = document.createElement('div');
   poster.className = 'card-poster';
