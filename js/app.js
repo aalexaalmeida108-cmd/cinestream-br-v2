@@ -103,10 +103,6 @@ function init() {
   });
   if (window.PerfGuard && window.PerfGuard.tier >= 2) state.autoLoadPaused = true;
 
-  window.addEventListener('pageshow', (event) => {
-    if (event.persisted) syncStateFromLocation({ replace: true, render: false, preserveInput: false, scrollTop: false });
-  });
-
   loadIndex();
   loadGenres();
   loadEpisodes();
@@ -260,7 +256,7 @@ function bindEvents() {
       if (entries.some((entry) => entry.isIntersecting) && !state.autoLoadPaused) {
         loadMore();
       }
-    }, { rootMargin: '500px 0px' });
+    }, { rootMargin: '700px 0px' });
     observer.observe(el.loadMore);
   }
 

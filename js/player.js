@@ -417,14 +417,6 @@ function bindEvents() {
     el.playerLoading.hidden = true;
     el.playerFrame.hidden = false;
   });
-
-  const releasePlayer = () => {
-    window.clearTimeout(loadTimer);
-    if (el.playerFrame && /^https?:\/\//.test(el.playerFrame.src)) {
-      el.playerFrame.src = 'about:blank';
-    }
-  };
-  window.addEventListener('pagehide', releasePlayer);
 }
 
 function onSeasonChange() {
@@ -506,25 +498,9 @@ function loadPlayer(url) {
   el.playerFrame.hidden = true;
   el.loadingText.textContent = 'Loading player...';
 
-  // Tear down the previous embed before loading the next one, so its scripts,
-  // timers and media pipeline do not keep running in the background.
-  const swap = () => {
-    if (el.playerFrame.src && el.playerFrame.src !== 'about:blank') {
-      el.playerFrame.src = 'about:blank';
-    }
-    requestAnimationFrame(() => {
-      el.playerFrame.src = url;
-    });
-  };
-
-  if (el.playerFrame.src && /^https?:\/\//.test(el.playerFrame.src)) {
-    swap();
-  } else {
-    el.playerFrame.src = url;
-  }
+  el.playerFrame.src = url;
 
   loadTimer = window.setTimeout(() => {
-    if (el.playerLoading.hidden) return;
     el.loadingText.textContent = 'Still loading... If it does not start, use “Try another source” above or open it in a new tab.';
   }, 12000);
 }

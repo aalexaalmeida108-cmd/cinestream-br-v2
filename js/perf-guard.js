@@ -25,8 +25,7 @@
   var HARD_MS = 900;        // one stall this long forces tier 1
   var WINDOW_MS = 15000;
   var CALM_MS = limit('calmMs', 45000);      // quiet time before stepping back up
-  var reloadCfg = typeof cfg.reloadMs === 'number' ? cfg.reloadMs : 6000;
-  var RELOAD_MS = reloadCfg > 0 ? reloadCfg : 0; // 0 disables auto-reload
+  var RELOAD_MS = limit('reloadMs', 6000);   // one stall this long is a freeze
   var COOLDOWN_MS = limit('cooldownMs', 600000);
   var RELOAD_KEY = 'cinestream:perfguard:reload';
   var REPORT_KEY = 'cinestream:perfguard:last';
@@ -96,7 +95,6 @@
   }
 
   function reload() {
-    if (!RELOAD_MS) return;
     if (reloading || !started) return;
     if (document.visibilityState === 'hidden') return;
     // A reload under an open dialog throws away what the reader is doing.
