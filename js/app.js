@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', init);
 function init() {
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
+  el.brandHome = document.getElementById('brandHome');
   el.grid = document.getElementById('grid');
   el.notice = document.getElementById('notice');
   el.resultCount = document.getElementById('resultCount');
@@ -256,6 +257,31 @@ function applyPendingScrollRestore() {
 }
 
 function bindEvents() {
+  if (el.brandHome) {
+    el.brandHome.addEventListener('click', (event) => {
+      event.preventDefault();
+      try { sessionStorage.removeItem(SCROLL_KEY); } catch (_) { /* ignore */ }
+      state.pendingScrollRestore = null;
+      state.searchAll = false;
+      state.query = '';
+      state.genre = 'all';
+      state.sort = 'popular';
+      state.visible = PAGE_SIZE;
+      state.rendered = 0;
+      state.version += 1;
+      state.view = null;
+      el.searchInput.value = '';
+      el.searchClear.hidden = true;
+      el.sortSelect.value = 'popular';
+      updateGenres();
+      updateDocumentTitle();
+      syncUrl();
+      switchCategory('movies', { updateHash: false, genre: 'all', query: '' }).finally(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  }
+
   el.tabs.forEach((tab) => {
     tab.addEventListener('click', () => switchCategory(tab.dataset.category));
     tab.addEventListener('keydown', onTabKeydown);
