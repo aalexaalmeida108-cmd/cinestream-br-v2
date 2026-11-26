@@ -103,6 +103,14 @@ function init() {
   });
   if (window.PerfGuard && window.PerfGuard.tier >= 2) state.autoLoadPaused = true;
 
+  // Browsers may restore a heavy bfcache page in a bad state; a clean reload
+  // when returning avoids stale workers/listeners piling up.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      window.location.reload();
+    }
+  });
+
   loadIndex();
   loadGenres();
   loadEpisodes();
@@ -256,7 +264,7 @@ function bindEvents() {
       if (entries.some((entry) => entry.isIntersecting) && !state.autoLoadPaused) {
         loadMore();
       }
-    }, { rootMargin: '700px 0px' });
+    }, { rootMargin: '500px 0px' });
     observer.observe(el.loadMore);
   }
 

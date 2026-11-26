@@ -104,8 +104,9 @@ button {
   min-height: var(--header-h);
   display: flex;
   align-items: center;
-  background: rgba(11, 13, 16, 0.94);
+  background: rgba(11, 13, 16, 0.97);
   border-bottom: 1px solid var(--border);
+  backface-visibility: hidden;
 }
 
 .header-inner {
@@ -1213,9 +1214,7 @@ body.has-modal {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(4, 6, 9, 0.72);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(4, 6, 9, 0.84);
 }
 
 .pix-card {
@@ -1428,8 +1427,7 @@ body.has-modal {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(3, 5, 9, 0.72);
-  backdrop-filter: blur(3px);
+  background: rgba(3, 5, 9, 0.84);
 }
 
 .install-card {
