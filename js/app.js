@@ -103,12 +103,8 @@ function init() {
   });
   if (window.PerfGuard && window.PerfGuard.tier >= 2) state.autoLoadPaused = true;
 
-  // Browsers may restore a heavy bfcache page in a bad state; a clean reload
-  // when returning avoids stale workers/listeners piling up.
   window.addEventListener('pageshow', (event) => {
-    if (event.persisted) {
-      window.location.reload();
-    }
+    if (event.persisted) syncStateFromLocation({ replace: true, render: false, preserveInput: false, scrollTop: false });
   });
 
   loadIndex();
